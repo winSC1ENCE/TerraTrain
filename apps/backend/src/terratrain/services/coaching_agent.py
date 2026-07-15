@@ -13,18 +13,16 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator
-from datetime import date, timezone
+from datetime import date
 from typing import Any
 
 import httpx
 import structlog
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from terratrain.config import get_settings
 from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.route import Route
-from terratrain.db.models.session import TrainingSession
 from terratrain.db.models.workout import Workout
 from terratrain.schemas.workout import WorkoutPhase, WorkoutPlan
 from terratrain.services.rag_service import RagService
@@ -407,23 +405,29 @@ When ready, call final_answer with the complete workout plan.
         return prompt
 
     async def _execute_tool(self, name: str, args: dict) -> object:
-        if name == "query_training_science":
-            chunks = await self._rag.retrieve(args.get("topic", ""), top_k=3)
-            return [c["content"] for c in chunks]
+        """Execute a tool call. Errors are returned as results (never raised)
+        so a bad argument from the LLM cannot kill the SSE stream."""
+        try:
+            if name == "query_training_science":
+                chunks = await self._rag.retrieve(args.get("topic", ""), top_k=3)
+                return [c["content"] for c in chunks]
 
-        if name == "calculate_zones":
-            return TrainingAnalytics.calculate_zones(
-                ftp=args["ftp"],
-                model=args.get("model", "coggan_classic"),
-            )
+            if name == "calculate_zones":
+                model = args.get("model") or "coggan_classic"
+                if model not in ("coggan_classic",):
+                    model = "coggan_classic"  # LLMs invent model names — normalize
+                return TrainingAnalytics.calculate_zones(ftp=args["ftp"], model=model)
 
-        if name == "estimate_tss":
-            return TrainingAnalytics.estimate_tss(
-                duration_min=args["duration_min"],
-                intensity_factor=args["intensity_factor"],
-            )
+            if name == "estimate_tss":
+                return TrainingAnalytics.estimate_tss(
+                    duration_min=float(args["duration_min"]),
+                    intensity_factor=float(args["intensity_factor"]),
+                )
 
-        return {"error": f"Unknown tool: {name}"}
+            return {"error": f"Unknown tool: {name}"}
+        except Exception as exc:
+            logger.warning("coaching.tool_failed", tool=name, error=str(exc))
+            return {"error": f"Tool {name} failed: {exc}"}
 
     async def _call_ollama(self, messages: list[dict]) -> dict:
         settings = self._settings
@@ -465,9 +469,7 @@ When ready, call final_answer with the complete workout plan.
         structured_text: str,
         scheduled_date: date | None,
     ) -> Workout:
-        from datetime import datetime
-
-        total_min = sum(p.duration_min for p in plan.phases)
+        total_min = sum(p.duration_min * max(1, p.repeat) for p in plan.phases)
         workout = Workout(
             athlete_id=athlete.id,
             route_id=route.id if route else None,

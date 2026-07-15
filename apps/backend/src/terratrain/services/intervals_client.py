@@ -97,6 +97,35 @@ class IntervalsClient:
             data = resp.json()
             return str(data.get("id", ""))
 
+    @staticmethod
+    def _map_profile(profile: dict, sport: str) -> dict:
+        """Map an Intervals.icu athlete profile to TerraTrain athlete fields.
+
+        FTP/LTHR/max_hr are per-sport and live in `sportSettings`; weight and
+        resting HR are top-level `icu_*` fields.
+        """
+        sport_types = {
+            "cycling": {"Ride", "VirtualRide", "MountainBikeRide", "GravelRide", "TrackRide"},
+            "running": {"Run", "VirtualRun", "TrailRun"},
+        }
+        wanted = sport_types.get(sport, {"Ride"})
+
+        settings = profile.get("sportSettings") or []
+        chosen = next(
+            (s for s in settings if set(s.get("types") or []) & wanted),
+            settings[0] if settings else None,
+        )
+
+        updates: dict = {
+            "weight_kg": profile.get("icu_weight"),
+            "resting_hr": profile.get("icu_resting_hr"),
+        }
+        if chosen:
+            updates["ftp_watts"] = chosen.get("ftp")
+            updates["lthr"] = chosen.get("lthr")
+            updates["max_hr"] = chosen.get("max_hr")
+        return updates
+
     async def sync_to_db(
         self, athlete: Athlete, session: object, days: int = 90
     ) -> dict:
@@ -164,16 +193,14 @@ class IntervalsClient:
         profile_updated = False
         try:
             profile = await self.get_athlete_profile()
-            if profile.get("ftp"):
-                athlete.ftp_watts = profile["ftp"]
-                profile_updated = True
-            if profile.get("weight"):
-                athlete.weight_kg = profile["weight"]
-                profile_updated = True
+            for field, value in self._map_profile(profile, athlete.sport).items():
+                if value is not None:
+                    setattr(athlete, field, value)
+                    profile_updated = True
             if profile_updated:
                 await db.commit()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("intervals.profile_sync_failed", error=str(exc))
 
         return {
             "sessions_synced": synced,

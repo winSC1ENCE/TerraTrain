@@ -3,7 +3,7 @@ SHELL         := /bin/bash
 BACKEND_DIR   := apps/backend
 FRONTEND_DIR  := apps/frontend
 
-.PHONY: help setup dev dev-backend dev-frontend build down clean logs \
+.PHONY: help setup dev dev-gpu dev-backend dev-frontend up up-gpu build down clean logs \
         pull-models-cpu pull-models-gpu pull-models-max \
         migrate migrate-new migrate-down migrate-history \
         seed ingest-papers test-ollama \
@@ -55,6 +55,12 @@ dev-frontend: ## Start frontend dev server
 
 dev-gpu: ## Start all services with GPU-enabled Ollama
 	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+
+up: ## Start all services in the background — safe to close the terminal (use 'make logs' to watch, 'make down' to stop)
+	docker compose up -d
+
+up-gpu: ## Start all services in the background with GPU-enabled Ollama — safe to close the terminal
+	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 build: ## Build all Docker images

@@ -13,7 +13,6 @@ interface AthleteStore {
   status: AthleteStatus; // NOT persisted
   lastSync: string | null; // persisted, ISO timestamp
   language: Language; // persisted, default "de"
-  hydrated: boolean; // NOT persisted
 
   bootstrap: () => Promise<void>;
   setAthlete: (a: Athlete) => void;
@@ -29,7 +28,6 @@ export const useAthleteStore = create<AthleteStore>()(
       status: "idle",
       lastSync: null,
       language: "de",
-      hydrated: false,
 
       bootstrap: async () => {
         set({ status: "loading" });
@@ -59,9 +57,6 @@ export const useAthleteStore = create<AthleteStore>()(
         lastSync: s.lastSync,
         language: s.language,
       }),
-      onRehydrateStorage: () => () => {
-        useAthleteStore.setState({ hydrated: true });
-      },
     }
   )
 );

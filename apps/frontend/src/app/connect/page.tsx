@@ -17,7 +17,10 @@ type Step = "form" | "syncing" | "success";
 export default function ConnectPage() {
   const router = useRouter();
   const t = useT();
-  const { status, hydrated, setAthlete, markSynced } = useAthleteStore();
+  const { status, setAthlete, markSynced } = useAthleteStore();
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const [step, setStep] = useState<Step>("form");
   const [intervalsId, setIntervalsId] = useState("");
@@ -31,8 +34,8 @@ export default function ConnectPage() {
 
   // Already connected? Go to dashboard.
   useEffect(() => {
-    if (hydrated && status === "ready") router.replace("/");
-  }, [hydrated, status, router]);
+    if (mounted && status === "ready") router.replace("/");
+  }, [mounted, status, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

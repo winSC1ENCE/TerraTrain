@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAthleteStore } from "@/stores/athlete-store";
 import { FullPageSpinner } from "@/components/ui/Spinner";
@@ -10,13 +10,18 @@ import { useT } from "@/lib/i18n";
 export function AthleteGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const t = useT();
-  const { athlete, status, hydrated, bootstrap } = useAthleteStore();
+  const { athlete, status, bootstrap } = useAthleteStore();
+
+  // After the first client-side effect, zustand's synchronous localStorage
+  // rehydration is guaranteed complete — no onRehydrateStorage callback needed.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (hydrated && status === "idle") {
+    if (mounted && status === "idle") {
       void bootstrap();
     }
-  }, [hydrated, status, bootstrap]);
+  }, [mounted, status, bootstrap]);
 
   useEffect(() => {
     if (status === "none") {
@@ -24,7 +29,7 @@ export function AthleteGate({ children }: { children: React.ReactNode }) {
     }
   }, [status, router]);
 
-  if (!hydrated) return <FullPageSpinner />;
+  if (!mounted) return <FullPageSpinner />;
 
   if (status === "error") {
     return (
@@ -38,7 +43,7 @@ export function AthleteGate({ children }: { children: React.ReactNode }) {
   }
 
   // Optimistic paint: cached athlete renders immediately while revalidating
-  if (athlete && (status === "ready" || status === "loading")) {
+  if (athlete && (status === "ready" || status === "loading" || status === "idle")) {
     return <>{children}</>;
   }
 

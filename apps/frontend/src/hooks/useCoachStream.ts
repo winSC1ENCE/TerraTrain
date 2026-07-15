@@ -1,40 +1,82 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { CoachingRequest, CoachingSSEEvent } from "@/lib/types";
+import { API_BASE } from "@/lib/api";
+import type { CoachPlan, CoachingRequest } from "@/lib/types";
+
+export interface CoachEvent {
+  kind: "thinking" | "tool_call" | "tool_result";
+  text: string;
+}
 
 interface CoachStreamState {
-  thinking: string[];
-  toolCalls: string[];
-  plan: Record<string, unknown> | null;
+  events: CoachEvent[];
+  plan: CoachPlan | null;
   error: string | null;
   isStreaming: boolean;
 }
 
+const INITIAL: CoachStreamState = {
+  events: [],
+  plan: null,
+  error: null,
+  isStreaming: false,
+};
+
 export function useCoachStream() {
-  const [state, setState] = useState<CoachStreamState>({
-    thinking: [],
-    toolCalls: [],
-    plan: null,
-    error: null,
-    isStreaming: false,
-  });
+  const [state, setState] = useState<CoachStreamState>(INITIAL);
   const abortRef = useRef<AbortController | null>(null);
 
   const start = useCallback(async (request: CoachingRequest) => {
     abortRef.current?.abort();
-    abortRef.current = new AbortController();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    setState({ thinking: [], toolCalls: [], plan: null, error: null, isStreaming: true });
+    setState({ ...INITIAL, isStreaming: true });
 
-    const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    function handleEvent(event: string, data: unknown) {
+      setState((s) => {
+        switch (event) {
+          case "thinking":
+            return { ...s, events: [...s.events, { kind: "thinking", text: String(data) }] };
+          case "tool_call":
+            return { ...s, events: [...s.events, { kind: "tool_call", text: String(data) }] };
+          case "tool_result":
+            return {
+              ...s,
+              events: [...s.events, { kind: "tool_result", text: String(data) }],
+            };
+          case "workout_plan":
+            return { ...s, plan: data as CoachPlan, isStreaming: false };
+          case "error":
+            return { ...s, error: String(data), isStreaming: false };
+          default:
+            return s;
+        }
+      });
+    }
+
+    function processBlock(block: string) {
+      let eventType = "";
+      let dataRaw = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) eventType = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataRaw += line.slice(5).trim();
+      }
+      if (!eventType) return;
+      try {
+        handleEvent(eventType, JSON.parse(dataRaw));
+      } catch {
+        handleEvent(eventType, dataRaw);
+      }
+    }
 
     try {
-      const res = await fetch(`${BASE}/api/v1/coaching/generate`, {
+      const res = await fetch(`${API_BASE}/api/v1/coaching/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
-        signal: abortRef.current.signal,
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -45,6 +87,9 @@ export function useCoachStream() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      // SSE parsing: append to buffer, split on the event delimiter "\n\n",
+      // process every COMPLETE block, keep the trailing partial block as the
+      // new buffer. (Events split across network chunks are preserved.)
       let buffer = "";
 
       while (true) {
@@ -52,62 +97,20 @@ export function useCoachStream() {
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (line.startsWith("event:")) {
-            // handled below
-          } else if (line.startsWith("data:")) {
-            // SSE data line — parse previous event + data pair
-            // Simple approach: emit the raw line
-          }
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() ?? "";
+        for (const block of blocks) {
+          if (block.trim()) processBlock(block);
         }
-
-        // Proper SSE parsing
-        const events = buffer
-          .split("\n\n")
-          .filter((b) => b.includes("event:") && b.includes("data:"));
-        for (const block of events) {
-          const eventLine = block.split("\n").find((l) => l.startsWith("event:"));
-          const dataLine = block.split("\n").find((l) => l.startsWith("data:"));
-          if (!eventLine || !dataLine) continue;
-          const eventType = eventLine.replace("event:", "").trim();
-          const data = dataLine.replace("data:", "").trim();
-
-          try {
-            const parsed = JSON.parse(data);
-            handleEvent(eventType, parsed);
-          } catch {
-            handleEvent(eventType, data);
-          }
-        }
-        buffer = "";
       }
+      // Flush any final complete block left in the buffer
+      if (buffer.trim()) processBlock(buffer);
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setState((s) => ({ ...s, error: (err as Error).message, isStreaming: false }));
       }
     } finally {
       setState((s) => ({ ...s, isStreaming: false }));
-    }
-
-    function handleEvent(event: string, data: unknown) {
-      setState((s) => {
-        switch (event) {
-          case "thinking":
-            return { ...s, thinking: [...s.thinking, String(data)] };
-          case "tool_call":
-          case "tool_result":
-            return { ...s, toolCalls: [...s.toolCalls, String(data)] };
-          case "workout_plan":
-            return { ...s, plan: data as Record<string, unknown>, isStreaming: false };
-          case "error":
-            return { ...s, error: String(data), isStreaming: false };
-          default:
-            return s;
-        }
-      });
     }
   }, []);
 
@@ -116,5 +119,7 @@ export function useCoachStream() {
     setState((s) => ({ ...s, isStreaming: false }));
   }, []);
 
-  return { ...state, start, stop };
+  const reset = useCallback(() => setState(INITIAL), []);
+
+  return { ...state, start, stop, reset };
 }

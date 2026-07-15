@@ -21,9 +21,13 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
     )
 
+    # Allow both localhost and 127.0.0.1 on any port (local single-user tool).
+    # The regex covers browsers that reach the app via either host; the
+    # explicit list stays as an allow-list for anything non-local.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_origin_regex=settings.cors_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

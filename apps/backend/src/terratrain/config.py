@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost:3000"]
+    # Matches http(s)://localhost:<port> and http(s)://127.0.0.1:<port>
+    cors_origin_regex: str = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
 
     # Database
     database_url: str = Field(

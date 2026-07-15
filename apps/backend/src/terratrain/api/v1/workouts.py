@@ -14,7 +14,7 @@ from terratrain.services.security import decrypt_value
 router = APIRouter()
 
 
-@router.get("/{workout_id}", response_model=WorkoutResponse)
+@router.get("/workouts/{workout_id}", response_model=WorkoutResponse)
 async def get_workout(
     workout_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
@@ -25,7 +25,7 @@ async def get_workout(
     return workout
 
 
-@router.put("/{workout_id}", response_model=WorkoutResponse)
+@router.put("/workouts/{workout_id}", response_model=WorkoutResponse)
 async def update_workout(
     workout_id: uuid.UUID,
     body: WorkoutUpdate,
@@ -43,7 +43,7 @@ async def update_workout(
     return workout
 
 
-@router.delete("/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/workouts/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workout(
     workout_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
@@ -66,7 +66,7 @@ async def list_workouts(
     return list(result.scalars().all())
 
 
-@router.post("/{workout_id}/push", response_model=WorkoutResponse)
+@router.post("/workouts/{workout_id}/push", response_model=WorkoutResponse)
 async def push_workout(
     workout_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),

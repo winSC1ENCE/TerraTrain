@@ -76,6 +76,71 @@ class TrainingAnalytics:
         }
 
     @staticmethod
+    def compute_pmc_series(sessions: list[dict], days: int = 90) -> dict:
+        """Compute a gapless daily PMC series for charting.
+
+        Args:
+            sessions: list of dicts with keys {start_date, tss}
+            days: how many trailing days of series to return
+
+        Returns:
+            dict with `current` (ctl/atl/tsb/ramp_rate_7d) and `series`
+            (ascending, one entry per calendar day, rest days tss=0).
+        """
+        today = date.today()
+        if not sessions:
+            return {
+                "current": {"ctl": 0.0, "atl": 0.0, "tsb": 0.0, "ramp_rate_7d": 0.0},
+                "series": [],
+            }
+
+        df = pl.DataFrame(sessions).with_columns(
+            pl.col("start_date").cast(pl.Date).alias("date"),
+            pl.col("tss").fill_null(0.0).alias("tss"),
+        )
+
+        # Gapless daily TSS from earliest session to today (EMA warm-up included)
+        min_date = df["date"].min()
+        all_dates = pl.date_range(min_date, today, interval="1d", eager=True).alias("date")
+        daily_tss = df.group_by("date").agg(pl.col("tss").sum().alias("tss")).sort("date")
+        df_full = (
+            pl.DataFrame({"date": all_dates})
+            .join(daily_tss, on="date", how="left")
+            .with_columns(pl.col("tss").fill_null(0.0))
+            .sort("date")
+        )
+
+        dates = df_full["date"].to_list()
+        tss_list = df_full["tss"].to_list()
+        atl_list = TrainingAnalytics._ema(tss_list, TrainingAnalytics.ATL_DAYS)
+        ctl_list = TrainingAnalytics._ema(tss_list, TrainingAnalytics.CTL_DAYS)
+
+        # TSB convention: form for day N uses the previous day's CTL/ATL
+        series = []
+        for i, d in enumerate(dates):
+            prev = max(0, i - 1)
+            series.append({
+                "date": d.isoformat(),
+                "ctl": round(ctl_list[i], 1),
+                "atl": round(atl_list[i], 1),
+                "tsb": round(ctl_list[prev] - atl_list[prev], 1),
+                "tss": round(tss_list[i], 1),
+            })
+
+        # Trim to requested window (after EMA warm-up over full history)
+        series = series[-days:]
+
+        ctl_now = ctl_list[-1]
+        ramp_idx = max(0, len(ctl_list) - 8)
+        current = {
+            "ctl": round(ctl_now, 1),
+            "atl": round(atl_list[-1], 1),
+            "tsb": series[-1]["tsb"] if series else 0.0,
+            "ramp_rate_7d": round(ctl_now - ctl_list[ramp_idx], 1),
+        }
+        return {"current": current, "series": series}
+
+    @staticmethod
     def _ema(values: list[float], days: int) -> list[float]:
         """Exponential moving average with a decay constant of 1/days."""
         if not values:

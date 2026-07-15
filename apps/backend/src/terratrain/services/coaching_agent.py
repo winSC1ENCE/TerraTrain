@@ -149,11 +149,13 @@ class CoachingAgent:
 
         yield {"event": "thinking", "data": "Starting coaching agent loop..."}
 
-        # Step 2: agent loop
+        # Step 2: agent loop with validation-feedback retry
         messages: list[dict] = [{"role": "user", "content": system_prompt}]
-        plan_data: dict | None = None
+        plan: WorkoutPlan | None = None
+        validation_retries_left = 1
+        max_turns = self._settings.ollama_max_agent_turns + 2  # headroom for retry
 
-        for turn in range(self._settings.ollama_max_agent_turns):
+        for turn in range(max_turns):
             yield {"event": "thinking", "data": f"Agent turn {turn + 1}..."}
 
             try:
@@ -170,6 +172,7 @@ class CoachingAgent:
                 yield {"event": "thinking", "data": assistant_msg.get("content", "")}
                 continue
 
+            plan_data: dict | None = None
             for tc in tool_calls:
                 fn_name = tc.get("function", {}).get("name", "")
                 fn_args = tc.get("function", {}).get("arguments", {})
@@ -188,31 +191,51 @@ class CoachingAgent:
                     "content": json.dumps(result),
                 })
 
-            if plan_data:
+            if plan_data is None:
+                continue
+
+            # Parse + validate the submitted plan
+            try:
+                candidate = WorkoutPlan(
+                    name=plan_data["name"],
+                    workout_type=plan_data["workout_type"],
+                    sport=plan_data.get("sport", athlete.sport),
+                    phases=[WorkoutPhase(**p) for p in plan_data["phases"]],
+                    target_tss=plan_data["target_tss"],
+                    rationale=plan_data["rationale"],
+                    coach_notes=plan_data.get("coach_notes", ""),
+                )
+                validation_errors = WorkoutFormatter.validate(candidate)
+            except Exception as exc:
+                validation_errors = [f"Plan does not match the required schema: {exc}"]
+                candidate = None  # type: ignore[assignment]
+
+            if not validation_errors and candidate is not None:
+                plan = candidate
                 break
 
-        if not plan_data:
-            yield {"event": "error", "data": "Agent did not produce a workout plan"}
+            if validation_retries_left > 0:
+                validation_retries_left -= 1
+                feedback = (
+                    "Your workout plan was REJECTED by the validator. Problems:\n- "
+                    + "\n- ".join(validation_errors)
+                    + "\nFix these issues and call final_answer again with a corrected plan."
+                )
+                yield {
+                    "event": "thinking",
+                    "data": f"Plan rejected ({len(validation_errors)} issue(s)) — asking coach to revise...",
+                }
+                messages.append({"role": "tool", "content": feedback})
+                continue
+
+            yield {
+                "event": "error",
+                "data": "Validation failed after retry: " + "; ".join(validation_errors),
+            }
             return
 
-        # Step 3: parse, validate, format
-        try:
-            plan = WorkoutPlan(
-                name=plan_data["name"],
-                workout_type=plan_data["workout_type"],
-                sport=plan_data.get("sport", athlete.sport),
-                phases=[WorkoutPhase(**p) for p in plan_data["phases"]],
-                target_tss=plan_data["target_tss"],
-                rationale=plan_data["rationale"],
-                coach_notes=plan_data.get("coach_notes", ""),
-            )
-        except Exception as exc:
-            yield {"event": "error", "data": f"Invalid workout plan: {exc}"}
-            return
-
-        validation_errors = WorkoutFormatter.validate(plan)
-        if validation_errors:
-            yield {"event": "error", "data": f"Validation failed: {'; '.join(validation_errors)}"}
+        if plan is None:
+            yield {"event": "error", "data": "Agent did not produce a valid workout plan"}
             return
 
         structured_text = WorkoutFormatter.to_intervals_icu(plan)
@@ -250,17 +273,20 @@ class CoachingAgent:
         }
 
     async def _get_pmc(self, athlete: Athlete) -> dict:
-        result = await self._session.execute(
-            select(TrainingSession)
-            .where(TrainingSession.athlete_id == athlete.id)
-            .order_by(TrainingSession.start_date.desc())
-        )
-        sessions = result.scalars().all()
-        session_dicts = [
-            {"start_date": s.start_date.date(), "tss": s.tss or 0.0}
-            for s in sessions
-        ]
-        return TrainingAnalytics.compute_pmc(session_dicts)
+        """Current training load — uses the shared fitness service, which
+        falls back to Intervals.icu wellness for Strava-sourced athletes."""
+        from terratrain.services.fitness_service import get_fitness
+
+        fitness = await get_fitness(athlete, self._session, days=90)
+        current = fitness["current"]
+        weekly_tss = sum(p["tss"] for p in fitness["series"][-7:])
+        return {
+            "ctl": current["ctl"],
+            "atl": current["atl"],
+            "tsb": current["tsb"],
+            "weekly_tss": round(weekly_tss, 1),
+            "session_count": len([p for p in fitness["series"] if p["tss"] > 0]),
+        }
 
     def _build_context(
         self,
@@ -354,6 +380,26 @@ Design a structured workout that:
 2. Places intervals on climbs if a route is provided
 3. Follows evidence-based periodization from the training science context
 4. Produces a realistic, safe training stress (TSS)
+
+## HARD RULES — plans violating these are rejected automatically
+- First phase = warmup: at most 75% FTP, at least 10 min
+- Last phase = cooldown: at most 75% FTP
+- Intervals ABOVE 105% FTP: maximum 8 min each
+- Threshold intervals (95-105% FTP): maximum 30 min each
+- Total time at/above 95% FTP: maximum 60 min per session
+- `target_power_pct` must be a NUMBER (e.g. 95), never a zone label
+- `target_hr_zone` only as numeric bpm range like "130-145" — NEVER "Z2"
+- Use `repeat` for interval sets (e.g. 4 reps of 5min on / 3min off:
+  one phase with duration_min=5, repeat=4 followed by one with duration_min=3, repeat=4)
+- `target_tss` must match the phases (validator recomputes it; ±30% tolerance)
+
+## Example of a GOOD threshold plan (phases only)
+[
+  {"name": "Warmup", "duration_min": 15, "zone": "Z2", "target_power_pct": 65, "repeat": 1},
+  {"name": "Threshold On", "duration_min": 12, "zone": "Z4", "target_power_pct": 96, "repeat": 3},
+  {"name": "Recovery", "duration_min": 5, "zone": "Z1", "target_power_pct": 50, "repeat": 3},
+  {"name": "Cooldown", "duration_min": 10, "zone": "Z1", "target_power_pct": 55, "repeat": 1}
+]
 
 Use your tools to check zones, estimate TSS, or query more science.
 When ready, call final_answer with the complete workout plan.

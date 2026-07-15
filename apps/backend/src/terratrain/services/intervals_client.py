@@ -78,6 +78,26 @@ class IntervalsClient:
         wait=wait_exponential(multiplier=1, min=2, max=30),
         stop=stop_after_attempt(4),
     )
+    async def get_wellness(self, oldest: date, newest: date) -> list[dict]:
+        """Daily wellness entries incl. Intervals.icu's own CTL/ATL.
+
+        This works even for Strava-sourced athletes: activity details are
+        blocked by Strava's API terms, but Intervals.icu's derived fitness
+        metrics are its own data and remain available.
+        """
+        async with self._client() as c:
+            resp = await c.get(
+                f"{self._base}/athlete/{self._athlete_id}/wellness",
+                params={"oldest": oldest.isoformat(), "newest": newest.isoformat()},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    @retry(
+        retry=retry_if_exception(_is_retryable),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        stop=stop_after_attempt(4),
+    )
     async def push_workout(self, workout: object) -> str:
         """Push a workout to Intervals.icu calendar and return the event ID."""
         payload = {

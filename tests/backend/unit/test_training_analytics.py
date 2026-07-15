@@ -54,3 +54,37 @@ def test_calculate_zones_coggan_classic():
     assert "z4" in zones
     assert zones["z4"]["min_pct"] == 88
     assert zones["z4"]["max_pct"] == 100
+
+
+def test_pmc_series_empty():
+    result = TrainingAnalytics.compute_pmc_series([])
+    assert result["series"] == []
+    assert result["current"]["ctl"] == 0.0
+
+
+def test_pmc_series_gapless_daily():
+    """Series must have one entry per calendar day with no gaps."""
+    today = date.today()
+    # Sessions only every 3rd day
+    sessions = [
+        {"start_date": today - timedelta(days=i), "tss": 80.0}
+        for i in range(0, 30, 3)
+    ]
+    result = TrainingAnalytics.compute_pmc_series(sessions, days=30)
+    series = result["series"]
+    assert len(series) >= 28  # ~30 days, gapless
+    dates = [s["date"] for s in series]
+    assert dates == sorted(dates)  # ascending
+    # verify no gaps: consecutive dates differ by exactly 1 day
+    for a, b in zip(dates, dates[1:]):
+        assert (date.fromisoformat(b) - date.fromisoformat(a)).days == 1
+    # rest days present with tss=0
+    assert any(s["tss"] == 0.0 for s in series)
+
+
+def test_pmc_series_current_matches_last_entry():
+    sessions = _sessions(60, tss_per_day=80.0)
+    result = TrainingAnalytics.compute_pmc_series(sessions, days=90)
+    assert result["current"]["ctl"] == result["series"][-1]["ctl"]
+    assert result["current"]["tsb"] == result["series"][-1]["tsb"]
+    assert "ramp_rate_7d" in result["current"]

@@ -108,3 +108,30 @@ async def list_athletes(
 ) -> list[Athlete]:
     result = await session.execute(select(Athlete))
     return list(result.scalars().all())
+
+
+@router.get("/{athlete_id}/fitness")
+async def get_fitness(
+    athlete_id: uuid.UUID,
+    days: int = 90,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Daily PMC series (CTL/ATL/TSB) for the dashboard chart.
+
+    Falls back to Intervals.icu wellness data for Strava-sourced athletes
+    whose local sessions carry no TSS.
+    """
+    from datetime import date as date_type
+
+    from terratrain.services.fitness_service import get_fitness as fitness
+
+    athlete = await session.get(Athlete, athlete_id)
+    if not athlete:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    pmc = await fitness(athlete, session, days=days)
+    return {
+        "athlete_id": str(athlete_id),
+        "as_of": date_type.today().isoformat(),
+        **pmc,
+    }

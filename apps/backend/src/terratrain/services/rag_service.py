@@ -17,28 +17,43 @@ class RagService:
         self._settings = get_settings()
 
     async def retrieve(self, query: str, top_k: int | None = None) -> list[dict]:
-        """Embed query and return top-k similar document chunks."""
-        k = top_k or self._settings.rag_top_k
-        embedding = await self._embed(query)
+        """Embed query and return top-k similar document chunks.
 
-        # pgvector cosine similarity search via raw SQL
-        result = await self._session.execute(
-            text(
-                """
-                SELECT
-                    content,
-                    document_title,
-                    document_source,
-                    1 - (embedding <=> CAST(:emb AS vector)) AS score
-                FROM document_chunks
-                WHERE embedding IS NOT NULL
-                ORDER BY embedding <=> CAST(:emb AS vector)
-                LIMIT :k
-                """
-            ),
-            {"emb": str(embedding), "k": k},
-        )
-        rows = result.fetchall()
+        Degrades gracefully to an empty list if the embedding model is
+        unavailable or no documents have been ingested yet — the coach can
+        still produce a workout without RAG grounding.
+        """
+        k = top_k or self._settings.rag_top_k
+
+        try:
+            embedding = await self._embed(query)
+        except Exception as exc:
+            logger.warning("rag.embed_failed", error=str(exc))
+            return []
+
+        try:
+            # pgvector cosine similarity search via raw SQL
+            result = await self._session.execute(
+                text(
+                    """
+                    SELECT
+                        content,
+                        document_title,
+                        document_source,
+                        1 - (embedding <=> CAST(:emb AS vector)) AS score
+                    FROM document_chunks
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding <=> CAST(:emb AS vector)
+                    LIMIT :k
+                    """
+                ),
+                {"emb": str(embedding), "k": k},
+            )
+            rows = result.fetchall()
+        except Exception as exc:
+            logger.warning("rag.query_failed", error=str(exc))
+            return []
+
         return [
             {
                 "content": r.content,

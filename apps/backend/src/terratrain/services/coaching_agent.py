@@ -33,6 +33,10 @@ from terratrain.services.workout_formatter import WorkoutFormatter
 
 logger = structlog.get_logger()
 
+
+class OllamaError(Exception):
+    """Raised when the Ollama chat backend is unreachable or misconfigured."""
+
 # JSON schema for the final_answer tool — forces structured WorkoutPlan output
 WORKOUT_PLAN_TOOL_SCHEMA = {
     "type": "object",
@@ -152,7 +156,12 @@ class CoachingAgent:
         for turn in range(self._settings.ollama_max_agent_turns):
             yield {"event": "thinking", "data": f"Agent turn {turn + 1}..."}
 
-            response = await self._call_ollama(messages)
+            try:
+                response = await self._call_ollama(messages)
+            except OllamaError as exc:
+                yield {"event": "error", "data": str(exc)}
+                return
+
             assistant_msg = response.get("message", {})
             messages.append(assistant_msg)
 
@@ -372,19 +381,35 @@ When ready, call final_answer with the complete workout plan.
 
     async def _call_ollama(self, messages: list[dict]) -> dict:
         settings = self._settings
-        async with httpx.AsyncClient(timeout=settings.ollama_request_timeout) as client:
-            resp = await client.post(
-                f"{settings.ollama_base_url}/api/chat",
-                json={
-                    "model": settings.ollama_chat_model,
-                    "messages": messages,
-                    "tools": TOOLS,
-                    "stream": False,
-                    "options": {"temperature": 0.3},
-                },
+        try:
+            async with httpx.AsyncClient(timeout=settings.ollama_request_timeout) as client:
+                resp = await client.post(
+                    f"{settings.ollama_base_url}/api/chat",
+                    json={
+                        "model": settings.ollama_chat_model,
+                        "messages": messages,
+                        "tools": TOOLS,
+                        "stream": False,
+                        "options": {"temperature": 0.3},
+                    },
+                )
+        except httpx.HTTPError as exc:
+            raise OllamaError(
+                f"Could not reach the AI service at {settings.ollama_base_url}. "
+                f"Is Ollama running? ({exc})"
+            ) from exc
+
+        if resp.status_code == 404:
+            raise OllamaError(
+                f"The AI model '{settings.ollama_chat_model}' is not installed. "
+                f"Run 'make pull-models-gpu' to download it, then try again."
             )
-            resp.raise_for_status()
-            return resp.json()
+        if resp.status_code >= 400:
+            raise OllamaError(
+                f"The AI model returned an error (HTTP {resp.status_code}): "
+                f"{resp.text[:200]}"
+            )
+        return resp.json()
 
     async def _persist_workout(
         self,

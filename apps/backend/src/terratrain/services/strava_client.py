@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import structlog
@@ -61,7 +61,7 @@ class StravaClient:
         athlete.strava_athlete_id = strava_id
 
         existing_token = await db_session.get(StravaToken, {"athlete_id": athlete_uuid})
-        expires_at = datetime.fromtimestamp(data["expires_at"], tz=timezone.utc)
+        expires_at = datetime.fromtimestamp(data["expires_at"], tz=UTC)
 
         if existing_token:
             existing_token.access_token_encrypted = encrypt_value(data["access_token"])

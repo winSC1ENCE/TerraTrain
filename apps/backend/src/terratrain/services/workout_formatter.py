@@ -23,8 +23,13 @@ _HR_PATTERN = re.compile(r"^\d{2,3}(-\d{2,3})?$")
 
 # Fallback power % when only a zone label is given
 _ZONE_POWER_MAP = {
-    "Z1": 50, "Z2": 65, "Z3": 82, "Z4": 94,
-    "Z5": 108, "Z6": 130, "Z7": 155,
+    "Z1": 50,
+    "Z2": 65,
+    "Z3": 82,
+    "Z4": 94,
+    "Z5": 108,
+    "Z6": 130,
+    "Z7": 155,
 }
 
 
@@ -156,9 +161,7 @@ class WorkoutFormatter:
         first_pct = WorkoutFormatter._phase_power_pct(first)
         last_pct = WorkoutFormatter._phase_power_pct(last)
         if first_pct > 75 or first.duration_min < 5:
-            errors.append(
-                "First phase must be a warmup: at most 75% FTP and at least 5 min"
-            )
+            errors.append("First phase must be a warmup: at most 75% FTP and at least 5 min")
         if last_pct > 75:
             errors.append("Last phase must be a cooldown at 75% FTP or below")
 

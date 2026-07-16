@@ -95,7 +95,7 @@ seed: ## Seed DB with development fixtures
 	PYTHONPATH=$(BACKEND_DIR)/src uv run python scripts/seed_db.py
 
 ingest-papers: ## Ingest PDFs from data/papers/ into pgvector
-	PYTHONPATH=$(BACKEND_DIR)/src uv run python scripts/ingest_papers.py
+	docker compose exec backend python scripts/ingest_papers.py
 
 test-ollama: ## Smoke-test Ollama connectivity and model availability
 	PYTHONPATH=$(BACKEND_DIR)/src uv run python scripts/test_ollama.py

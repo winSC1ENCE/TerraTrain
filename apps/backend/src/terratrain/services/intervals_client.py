@@ -6,7 +6,7 @@ Retries on 429 / 5xx with exponential backoff via tenacity.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 
 import httpx
 import structlog
@@ -32,7 +32,7 @@ class IntervalsClient:
         self._base = get_settings().intervals_api_base_url
 
     @classmethod
-    def from_athlete(cls, athlete: Athlete) -> "IntervalsClient":
+    def from_athlete(cls, athlete: Athlete) -> IntervalsClient:
         if not athlete.intervals_api_key_encrypted:
             raise ValueError("Athlete has no Intervals.icu API key")
         api_key = decrypt_value(athlete.intervals_api_key_encrypted)
@@ -146,11 +146,8 @@ class IntervalsClient:
             updates["max_hr"] = chosen.get("max_hr")
         return updates
 
-    async def sync_to_db(
-        self, athlete: Athlete, session: object, days: int = 90
-    ) -> dict:
+    async def sync_to_db(self, athlete: Athlete, session: object, days: int = 90) -> dict:
         """Pull recent activities and upsert into training_sessions."""
-        from datetime import timezone
 
         from sqlalchemy import select
         from sqlalchemy.ext.asyncio import AsyncSession
@@ -167,18 +164,17 @@ class IntervalsClient:
         for act in activities:
             activity_id = str(act.get("id", ""))
             existing = await db.execute(
-                select(TrainingSession).where(
-                    TrainingSession.intervals_activity_id == activity_id
-                )
+                select(TrainingSession).where(TrainingSession.intervals_activity_id == activity_id)
             )
             if existing.scalar_one_or_none():
                 continue
 
             from datetime import datetime
+
             start_raw = act.get("start_date_local") or act.get("start_date", "")
             try:
                 start_dt = datetime.fromisoformat(start_raw.rstrip("Z")).replace(
-                    tzinfo=timezone.utc
+                    tzinfo=UTC
                 )
             except (ValueError, AttributeError):
                 continue
@@ -198,12 +194,10 @@ class IntervalsClient:
                 intensity_factor=act.get("intensity"),
                 elevation_gain_m=act.get("total_elevation_gain"),
                 avg_speed_kmh=(
-                    act.get("average_speed", 0) * 3.6
-                    if act.get("average_speed")
-                    else None
+                    act.get("average_speed", 0) * 3.6 if act.get("average_speed") else None
                 ),
                 activity_data=act,
-                created_at=datetime.now(tz=timezone.utc),
+                created_at=datetime.now(tz=UTC),
             )
             db.add(ts)
             synced += 1

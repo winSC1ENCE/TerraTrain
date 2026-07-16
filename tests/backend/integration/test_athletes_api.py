@@ -1,8 +1,7 @@
 """Integration tests for /api/v1/athletes endpoints."""
 
 import pytest
-from httpx import AsyncClient, ASGITransport
-
+from httpx import ASGITransport, AsyncClient
 from terratrain.main import app
 
 

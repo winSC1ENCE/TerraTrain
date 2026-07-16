@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import httpx
 import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception
 
 from terratrain.config import get_settings
 
 logger = structlog.get_logger()
+
+
+def _is_retryable_exception(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in (429, 500, 502, 503, 504)
+    return isinstance(exc, httpx.RequestError)
 
 
 class RagService:
@@ -64,15 +72,43 @@ class RagService:
             for r in rows
         ]
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_random_exponential(min=1, max=10),
+        retry=retry_if_exception(_is_retryable_exception),
+        reraise=True,
+    )
     async def _embed(self, text_: str) -> list[float]:
-        import httpx
-
         settings = self._settings
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                f"{settings.ollama_base_url}/api/embeddings",
-                json={"model": settings.ollama_embed_model, "prompt": text_},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["embedding"]
+        provider = settings.resolved_embedding_provider
+
+        if provider == "gemini":
+            if not settings.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY is not set. Please set it in your .env file.")
+
+            headers = {
+                "Authorization": f"Bearer {settings.gemini_api_key}",
+                "Content-Type": "application/json",
+            }
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    f"{settings.gemini_api_base}/embeddings",
+                    headers=headers,
+                    json={
+                        "model": settings.gemini_embed_model,
+                        "input": text_,
+                        "dimensions": 768,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["data"][0]["embedding"]
+        else:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    f"{settings.ollama_base_url}/api/embeddings",
+                    json={"model": settings.ollama_embed_model, "prompt": text_},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["embedding"]

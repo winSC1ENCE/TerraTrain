@@ -35,6 +35,7 @@ logger = structlog.get_logger()
 class OllamaError(Exception):
     """Raised when the Ollama chat backend is unreachable or misconfigured."""
 
+
 # JSON schema for the final_answer tool — forces structured WorkoutPlan output
 WORKOUT_PLAN_TOOL_SCHEMA = {
     "type": "object",
@@ -133,8 +134,11 @@ class CoachingAgent:
         scheduled_date: date | None,
         notes: str | None,
         auto_push: bool,
+        provider: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         yield {"event": "thinking", "data": "Gathering athlete context..."}
+
+        llm_provider = provider or self._settings.resolved_llm_provider
 
         # Step 1: assemble context concurrently
         pmc = await self._get_pmc(athlete)
@@ -157,7 +161,7 @@ class CoachingAgent:
             yield {"event": "thinking", "data": f"Agent turn {turn + 1}..."}
 
             try:
-                response = await self._call_ollama(messages)
+                response = await self._call_llm(messages, llm_provider)
             except OllamaError as exc:
                 yield {"event": "error", "data": str(exc)}
                 return
@@ -184,10 +188,15 @@ class CoachingAgent:
                 result = await self._execute_tool(fn_name, fn_args)
                 yield {"event": "tool_result", "data": f"{fn_name} → {str(result)[:200]}"}
 
-                messages.append({
+                tool_msg = {
                     "role": "tool",
                     "content": json.dumps(result),
-                })
+                }
+                if tc.get("id"):
+                    tool_msg["tool_call_id"] = tc["id"]
+                if fn_name:
+                    tool_msg["name"] = fn_name
+                messages.append(tool_msg)
 
             if plan_data is None:
                 continue
@@ -456,10 +465,82 @@ When ready, call final_answer with the complete workout plan.
             )
         if resp.status_code >= 400:
             raise OllamaError(
-                f"The AI model returned an error (HTTP {resp.status_code}): "
-                f"{resp.text[:200]}"
+                f"The AI model returned an error (HTTP {resp.status_code}): {resp.text[:200]}"
             )
         return resp.json()
+
+    async def _call_llm(self, messages: list[dict], provider: str) -> dict:
+        if provider == "gemini":
+            return await self._call_gemini(messages)
+        return await self._call_ollama(messages)
+
+    async def _call_gemini(self, messages: list[dict]) -> dict:
+        settings = self._settings
+        if not settings.gemini_api_key:
+            raise OllamaError("GEMINI_API_KEY is not set. Please set it in your .env file.")
+
+        headers = {
+            "Authorization": f"Bearer {settings.gemini_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": settings.gemini_chat_model,
+            "messages": messages,
+            "tools": TOOLS,
+            "temperature": 0.3,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=settings.ollama_request_timeout) as client:
+                resp = await client.post(
+                    f"{settings.gemini_api_base}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+        except httpx.HTTPError as exc:
+            raise OllamaError(
+                f"Could not reach Gemini API at {settings.gemini_api_base}. ({exc})"
+            ) from exc
+
+        if resp.status_code >= 400:
+            raise OllamaError(
+                f"Gemini API returned an error (HTTP {resp.status_code}): {resp.text[:200]}"
+            )
+
+        resp_data = resp.json()
+        try:
+            choice = resp_data["choices"][0]
+            msg = choice["message"]
+
+            tool_calls = msg.get("tool_calls", [])
+            mapped_tool_calls = []
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                args = fn.get("arguments", {})
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {}
+                mapped_tool_calls.append(
+                    {
+                        "id": tc.get("id"),
+                        "type": "function",
+                        "function": {"name": fn.get("name"), "arguments": args},
+                    }
+                )
+
+            normalized_msg = {
+                "role": "assistant",
+                "content": msg.get("content") or "",
+            }
+            if mapped_tool_calls:
+                normalized_msg["tool_calls"] = mapped_tool_calls
+
+            return {"message": normalized_msg}
+        except Exception as exc:
+            raise OllamaError(f"Failed to parse Gemini API response: {exc}") from exc
 
     async def _persist_workout(
         self,

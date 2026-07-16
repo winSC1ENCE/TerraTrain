@@ -40,6 +40,7 @@ async def generate_workout(
             scheduled_date=body.scheduled_date,
             notes=body.notes,
             auto_push=body.auto_push,
+            provider=body.provider,
         ):
             yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
 

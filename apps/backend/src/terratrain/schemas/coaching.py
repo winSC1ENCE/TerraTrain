@@ -11,6 +11,7 @@ class CoachingRequest(BaseModel):
     scheduled_date: date | None = None
     notes: str | None = None
     auto_push: bool = False
+    provider: str | None = None
 
 
 class CoachingSSEEvent(BaseModel):

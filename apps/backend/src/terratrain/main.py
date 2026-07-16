@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from terratrain.api.v1.router import router as v1_router
 from terratrain.config import get_settings
-from terratrain.db.engine import create_db_and_tables
 
 logger = structlog.get_logger()
 

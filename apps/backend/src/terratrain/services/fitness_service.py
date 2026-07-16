@@ -29,9 +29,7 @@ async def get_fitness(athlete: Athlete, db: AsyncSession, days: int = 90) -> dic
         select(TrainingSession).where(TrainingSession.athlete_id == athlete.id)
     )
     sessions = result.scalars().all()
-    session_dicts = [
-        {"start_date": s.start_date.date(), "tss": s.tss or 0.0} for s in sessions
-    ]
+    session_dicts = [{"start_date": s.start_date.date(), "tss": s.tss or 0.0} for s in sessions]
     pmc = TrainingAnalytics.compute_pmc_series(session_dicts, days=days)
 
     has_local_data = any(p["tss"] > 0 for p in pmc["series"])
@@ -49,9 +47,7 @@ async def _fitness_from_wellness(athlete: Athlete, days: int) -> dict | None:
     try:
         client = IntervalsClient.from_athlete(athlete)
         today = date.today()
-        entries = await client.get_wellness(
-            oldest=today - timedelta(days=days), newest=today
-        )
+        entries = await client.get_wellness(oldest=today - timedelta(days=days), newest=today)
     except Exception as exc:
         logger.warning("fitness.wellness_fallback_failed", error=str(exc))
         return None
@@ -69,13 +65,15 @@ async def _fitness_from_wellness(athlete: Athlete, days: int) -> dict | None:
         if ctl is None or atl is None:
             continue
         tsb = (prev_ctl - prev_atl) if prev_ctl is not None else (ctl - atl)
-        series.append({
-            "date": e.get("id", ""),
-            "ctl": round(float(ctl), 1),
-            "atl": round(float(atl), 1),
-            "tsb": round(float(tsb), 1),
-            "tss": round(float(e.get("ctlLoad") or 0.0), 1),
-        })
+        series.append(
+            {
+                "date": e.get("id", ""),
+                "ctl": round(float(ctl), 1),
+                "atl": round(float(atl), 1),
+                "tsb": round(float(tsb), 1),
+                "tss": round(float(e.get("ctlLoad") or 0.0), 1),
+            }
+        )
         prev_ctl, prev_atl = float(ctl), float(atl)
 
     if not series:

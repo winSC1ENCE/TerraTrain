@@ -43,11 +43,7 @@ class TrainingAnalytics:
         all_dates = pl.date_range(min_date, today, interval="1d", eager=True).alias("date")
         daily = pl.DataFrame({"date": all_dates})
 
-        daily_tss = (
-            df.group_by("date")
-            .agg(pl.col("tss").sum().alias("tss"))
-            .sort("date")
-        )
+        daily_tss = df.group_by("date").agg(pl.col("tss").sum().alias("tss")).sort("date")
 
         df_full = (
             daily.join(daily_tss, on="date", how="left")
@@ -119,13 +115,15 @@ class TrainingAnalytics:
         series = []
         for i, d in enumerate(dates):
             prev = max(0, i - 1)
-            series.append({
-                "date": d.isoformat(),
-                "ctl": round(ctl_list[i], 1),
-                "atl": round(atl_list[i], 1),
-                "tsb": round(ctl_list[prev] - atl_list[prev], 1),
-                "tss": round(tss_list[i], 1),
-            })
+            series.append(
+                {
+                    "date": d.isoformat(),
+                    "ctl": round(ctl_list[i], 1),
+                    "atl": round(atl_list[i], 1),
+                    "tsb": round(ctl_list[prev] - atl_list[prev], 1),
+                    "tss": round(tss_list[i], 1),
+                }
+            )
 
         # Trim to requested window (after EMA warm-up over full history)
         series = series[-days:]
@@ -156,7 +154,7 @@ class TrainingAnalytics:
         """TSS = (duration_sec × NP × IF) / (FTP × 3600) × 100
         Simplified: TSS = duration_h × IF² × 100
         """
-        return round((duration_min / 60) * (intensity_factor ** 2) * 100, 1)
+        return round((duration_min / 60) * (intensity_factor**2) * 100, 1)
 
     @staticmethod
     def calculate_zones(ftp: int, model: str = "coggan_classic") -> dict:

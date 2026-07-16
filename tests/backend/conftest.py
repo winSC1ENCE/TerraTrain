@@ -4,7 +4,6 @@ from collections.abc import AsyncGenerator
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from terratrain.db.base import Base
 
 
@@ -24,7 +23,9 @@ async def engine():
         eng = create_async_engine(url, echo=False)
 
         async with eng.begin() as conn:
-            await conn.execute(__import__("sqlalchemy").text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.execute(
+                __import__("sqlalchemy").text("CREATE EXTENSION IF NOT EXISTS vector")
+            )
             await conn.run_sync(Base.metadata.create_all)
 
         yield eng

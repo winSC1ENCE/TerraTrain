@@ -5,6 +5,7 @@ services:
     volumes:
       - ./apps/backend/src:/app/src:cached
       - ./data:/data
+      - ./scripts:/app/scripts:cached
     command: >
       uvicorn terratrain.main:app
       --reload

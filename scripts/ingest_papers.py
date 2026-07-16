@@ -11,7 +11,12 @@ from terratrain.ingestion.pdf_ingestor import PdfIngestor
 
 
 async def ingest_all() -> None:
-    papers_dir = Path(__file__).parent.parent / "data" / "papers"
+    container_dir = Path("/data/papers")
+    if container_dir.is_dir():
+        papers_dir = container_dir
+    else:
+        papers_dir = Path(__file__).parent.parent / "data" / "papers"
+
     pdfs = list(papers_dir.glob("*.pdf"))
 
     if not pdfs:

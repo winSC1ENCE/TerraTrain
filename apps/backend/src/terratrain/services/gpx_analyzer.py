@@ -15,9 +15,9 @@ import polars as pl
 
 class GpxAnalyzer:
     # Climb detection thresholds
-    MIN_GRADE_PCT = 3.0      # minimum gradient to start a climb
+    MIN_GRADE_PCT = 3.0  # minimum gradient to start a climb
     MIN_CLIMB_LENGTH_M = 300  # minimum sustained length
-    HYSTERESIS_M = 50        # how far below threshold before climb ends
+    HYSTERESIS_M = 50  # how far below threshold before climb ends
 
     @staticmethod
     def analyze(gpx_xml: str) -> dict:
@@ -28,11 +28,13 @@ class GpxAnalyzer:
         for track in gpx.tracks:
             for segment in track.segments:
                 for pt in segment.points:
-                    points.append({
-                        "lat": pt.latitude,
-                        "lon": pt.longitude,
-                        "ele": pt.elevation or 0.0,
-                    })
+                    points.append(
+                        {
+                            "lat": pt.latitude,
+                            "lon": pt.longitude,
+                            "ele": pt.elevation or 0.0,
+                        }
+                    )
 
         if len(points) < 2:
             return GpxAnalyzer._empty_result()
@@ -81,11 +83,13 @@ class GpxAnalyzer:
         for d in deltas_m[1:]:
             cumulative.append(cumulative[-1] + d)
 
-        return df.with_columns([
-            pl.Series("delta_m", deltas_m),
-            pl.Series("delta_ele", delta_eles),
-            pl.Series("cumulative_m", cumulative),
-        ])
+        return df.with_columns(
+            [
+                pl.Series("delta_m", deltas_m),
+                pl.Series("delta_ele", delta_eles),
+                pl.Series("cumulative_m", cumulative),
+            ]
+        )
 
     @staticmethod
     def _compute_grades(df: pl.DataFrame) -> pl.DataFrame:
@@ -122,9 +126,7 @@ class GpxAnalyzer:
                     below_threshold_m += segment_len
                     if below_threshold_m >= GpxAnalyzer.HYSTERESIS_M:
                         end_idx = i
-                        climb = GpxAnalyzer._build_climb(
-                            df, start_idx, end_idx, cumulative, eles
-                        )
+                        climb = GpxAnalyzer._build_climb(df, start_idx, end_idx, cumulative, eles)
                         if climb["length_m"] >= GpxAnalyzer.MIN_CLIMB_LENGTH_M:
                             climbs.append(climb)
                         in_climb = False

@@ -7,10 +7,7 @@ from terratrain.services.training_analytics import TrainingAnalytics
 
 def _sessions(n_days: int, tss_per_day: float) -> list[dict]:
     today = date.today()
-    return [
-        {"start_date": today - timedelta(days=i), "tss": tss_per_day}
-        for i in range(n_days)
-    ]
+    return [{"start_date": today - timedelta(days=i), "tss": tss_per_day} for i in range(n_days)]
 
 
 def test_empty_sessions_returns_zeros():
@@ -66,10 +63,7 @@ def test_pmc_series_gapless_daily():
     """Series must have one entry per calendar day with no gaps."""
     today = date.today()
     # Sessions only every 3rd day
-    sessions = [
-        {"start_date": today - timedelta(days=i), "tss": 80.0}
-        for i in range(0, 30, 3)
-    ]
+    sessions = [{"start_date": today - timedelta(days=i), "tss": 80.0} for i in range(0, 30, 3)]
     result = TrainingAnalytics.compute_pmc_series(sessions, days=30)
     series = result["series"]
     assert len(series) >= 28  # ~30 days, gapless

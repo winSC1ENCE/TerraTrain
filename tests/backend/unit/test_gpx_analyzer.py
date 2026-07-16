@@ -1,8 +1,6 @@
 """Unit tests for GpxAnalyzer — no DB, no network."""
 
-import math
 
-import pytest
 
 from terratrain.services.gpx_analyzer import GpxAnalyzer
 

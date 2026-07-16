@@ -65,9 +65,7 @@ async def smoke_test() -> None:
                 json={
                     "model": chat_model,
                     "stream": False,
-                    "messages": [
-                        {"role": "user", "content": "Reply with exactly: TERRATRAIN_OK"}
-                    ],
+                    "messages": [{"role": "user", "content": "Reply with exactly: TERRATRAIN_OK"}],
                     "options": {"temperature": 0},
                 },
                 timeout=60,

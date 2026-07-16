@@ -11,9 +11,7 @@ from terratrain.db.base import Base
 class TrainingSession(Base):
     __tablename__ = "training_sessions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     athlete_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("athletes.id", ondelete="CASCADE"), nullable=False
     )
@@ -33,9 +31,7 @@ class TrainingSession(Base):
     avg_speed_kmh: Mapped[float | None] = mapped_column(nullable=True)
 
     activity_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Relationships
     athlete: Mapped["Athlete"] = relationship(back_populates="training_sessions")  # type: ignore[name-defined]  # noqa: F821

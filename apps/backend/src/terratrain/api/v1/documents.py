@@ -71,9 +71,7 @@ async def delete_document(
 
         raise HTTPException(status_code=400, detail="Invalid document ID") from None
 
-    await session.execute(
-        delete(DocumentChunk).where(DocumentChunk.document_id == doc_uuid)
-    )
+    await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc_uuid))
     await session.commit()
 
 
@@ -87,4 +85,6 @@ async def search_documents(
 
     rag = RagService(session=session)
     chunks = await rag.retrieve(q, top_k=k)
-    return [{"content": c["content"], "source": c["source"], "score": c.get("score")} for c in chunks]
+    return [
+        {"content": c["content"], "source": c["source"], "score": c.get("score")} for c in chunks
+    ]

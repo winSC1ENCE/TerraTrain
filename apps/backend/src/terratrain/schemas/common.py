@@ -10,3 +10,4 @@ class HealthResponse(BaseModel):
     version: str = "0.1.0"
     database: str = "unknown"
     ollama: str = "unknown"
+    gemini: str = "unknown"

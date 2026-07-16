@@ -28,6 +28,29 @@ class Settings(BaseSettings):
     ollama_request_timeout: int = 180
     ollama_max_agent_turns: int = 6
 
+    # LLM / Embedding Providers
+    # "ollama" or "gemini"
+    llm_provider: str = "ollama"
+    embedding_provider: str = "ollama"
+
+    # Gemini
+    gemini_api_key: str = ""
+    gemini_chat_model: str = "models/gemini-2.5-flash"
+    gemini_embed_model: str = "models/gemini-embedding-001"
+    gemini_api_base: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+    @property
+    def resolved_llm_provider(self) -> str:
+        if self.llm_provider == "ollama" and self.gemini_api_key:
+            return "gemini"
+        return self.llm_provider
+
+    @property
+    def resolved_embedding_provider(self) -> str:
+        if self.embedding_provider == "ollama" and self.gemini_api_key:
+            return "gemini"
+        return self.embedding_provider
+
     # Intervals.icu
     intervals_api_base_url: str = "https://intervals.icu/api/v1"
 

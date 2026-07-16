@@ -24,6 +24,7 @@ export default function CoachPage() {
   const [routeId, setRouteId] = useState("");
   const [notes, setNotes] = useState("");
   const [phases, setPhases] = useState<WorkoutPhase[] | undefined>();
+  const [provider, setProvider] = useState("ollama");
 
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
@@ -57,6 +58,7 @@ export default function CoachPage() {
       scheduled_date: scheduledDate || undefined,
       route_id: routeId || undefined,
       notes: notes || undefined,
+      provider: provider,
     });
   }
 
@@ -79,7 +81,15 @@ export default function CoachPage() {
                 <WorkoutTypeSelector value={workoutType} onChange={setWorkoutType} />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Select
+                  label={t.coach.modelProvider}
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                >
+                  <option value="ollama">{t.coach.providers.ollama}</option>
+                  <option value="gemini">{t.coach.providers.gemini}</option>
+                </Select>
                 <Input
                   label={t.coach.date}
                   type="date"

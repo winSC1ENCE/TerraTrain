@@ -11,9 +11,7 @@ from terratrain.db.base import Base, TimestampMixin
 class StravaToken(Base, TimestampMixin):
     __tablename__ = "strava_tokens"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     athlete_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("athletes.id", ondelete="CASCADE"),

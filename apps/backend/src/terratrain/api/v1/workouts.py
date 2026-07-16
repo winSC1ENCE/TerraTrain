@@ -7,9 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from terratrain.api.deps import get_session
 from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.workout import Workout
-from terratrain.schemas.workout import WorkoutCreate, WorkoutResponse, WorkoutUpdate
+from terratrain.schemas.workout import WorkoutResponse, WorkoutUpdate
 from terratrain.services.intervals_client import IntervalsClient
-from terratrain.services.security import decrypt_value
 
 router = APIRouter()
 

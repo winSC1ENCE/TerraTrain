@@ -8,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps/backend/src"))
 
 from terratrain.db.engine import get_session_factory
 from terratrain.db.models.athlete import Athlete
-from terratrain.services.security import encrypt_value
 
 
 async def seed() -> None:

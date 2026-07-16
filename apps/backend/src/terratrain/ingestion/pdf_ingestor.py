@@ -12,18 +12,24 @@ from __future__ import annotations
 import hashlib
 import io
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
 import structlog
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception
 
 from terratrain.config import get_settings
 from terratrain.db.models.document import DocumentChunk
 
 logger = structlog.get_logger()
+
+
+def _is_retryable_exception(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in (429, 500, 502, 503, 504)
+    return isinstance(exc, httpx.RequestError)
 
 
 class PdfIngestor:
@@ -57,7 +63,7 @@ class PdfIngestor:
         batch_size = 16
         total = 0
         for batch_start in range(0, len(chunks), batch_size):
-            batch = chunks[batch_start: batch_start + batch_size]
+            batch = chunks[batch_start : batch_start + batch_size]
             embeddings = await self._embed_batch(batch)
 
             for idx, (chunk_text, embedding) in enumerate(
@@ -88,15 +94,30 @@ class PdfIngestor:
             pass
 
         # Fallback: llama-index reader
+        import tempfile
+        import os
+        from pathlib import Path
+
+        tmp_path = None
         try:
             from llama_index.readers.file import PDFReader
 
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+
             reader = PDFReader()
-            docs = reader.load_data(file=io.BytesIO(content))
+            docs = reader.load_data(file=Path(tmp_path))
             return "\n\n".join(d.text for d in docs)
         except Exception as exc:
             logger.error("pdf_ingestor.extract_failed", error=str(exc))
             return ""
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
 
     def _chunk_text(self, text: str) -> list[str]:
         settings = self._settings
@@ -114,25 +135,55 @@ class PdfIngestor:
             while len(current_words) >= size:
                 chunk = " ".join(current_words[:size])
                 chunks.append(chunk)
-                current_words = current_words[size - overlap:]
+                current_words = current_words[size - overlap :]
 
         if current_words:
             chunks.append(" ".join(current_words))
 
         return chunks
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_random_exponential(min=1, max=10),
+        retry=retry_if_exception(_is_retryable_exception),
+        reraise=True,
+    )
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         settings = self._settings
-        embeddings = []
-        async with httpx.AsyncClient(timeout=120) as client:
-            for text in texts:
+        provider = settings.resolved_embedding_provider
+
+        if provider == "gemini":
+            if not settings.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY is not set. Please set it in your .env file.")
+
+            headers = {
+                "Authorization": f"Bearer {settings.gemini_api_key}",
+                "Content-Type": "application/json",
+            }
+            async with httpx.AsyncClient(timeout=120) as client:
                 resp = await client.post(
-                    f"{settings.ollama_base_url}/api/embeddings",
-                    json={"model": settings.ollama_embed_model, "prompt": text},
+                    f"{settings.gemini_api_base}/embeddings",
+                    headers=headers,
+                    json={
+                        "model": settings.gemini_embed_model,
+                        "input": texts,
+                        "dimensions": 768,
+                    },
                 )
                 resp.raise_for_status()
-                embeddings.append(resp.json()["embedding"])
-        return embeddings
+                data = resp.json()
+                return [item["embedding"] for item in data["data"]]
+        else:
+            embeddings = []
+            async with httpx.AsyncClient(timeout=120) as client:
+                for text in texts:
+                    resp = await client.post(
+                        f"{settings.ollama_base_url}/api/embeddings",
+                        json={"model": settings.ollama_embed_model, "prompt": text},
+                    )
+                    resp.raise_for_status()
+                    embeddings.append(resp.json()["embedding"])
+            return embeddings
 
     @staticmethod
     def _deterministic_id(filename: str, content: bytes) -> uuid.UUID:

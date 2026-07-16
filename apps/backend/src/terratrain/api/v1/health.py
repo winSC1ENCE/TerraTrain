@@ -19,7 +19,8 @@ async def health() -> HealthResponse:
 async def readiness() -> HealthResponse:
     settings = get_settings()
     db_status = "ok"
-    ollama_status = "ok"
+    ollama_status = "unknown"
+    gemini_status = "unknown"
 
     # Check DB
     try:
@@ -31,13 +32,54 @@ async def readiness() -> HealthResponse:
         db_status = "error"
 
     # Check Ollama
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(f"{settings.ollama_base_url}/api/tags")
-            if resp.status_code != 200:
-                ollama_status = "error"
-    except Exception:
-        ollama_status = "error"
+    if (
+        settings.resolved_llm_provider == "ollama"
+        or settings.resolved_embedding_provider == "ollama"
+    ):
+        ollama_status = "ok"
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"{settings.ollama_base_url}/api/tags")
+                if resp.status_code != 200:
+                    ollama_status = "error"
+        except Exception:
+            ollama_status = "error"
 
-    status = "ok" if db_status == "ok" and ollama_status == "ok" else "degraded"
-    return HealthResponse(status=status, database=db_status, ollama=ollama_status)
+    # Check Gemini
+    if (
+        settings.resolved_llm_provider == "gemini"
+        or settings.resolved_embedding_provider == "gemini"
+    ):
+        gemini_status = "ok"
+        if not settings.gemini_api_key:
+            gemini_status = "error"
+        else:
+            try:
+                async with httpx.AsyncClient(timeout=5) as client:
+                    resp = await client.get(
+                        f"{settings.gemini_api_base}/models",
+                        headers={"Authorization": f"Bearer {settings.gemini_api_key}"},
+                    )
+                    if resp.status_code != 200:
+                        gemini_status = "error"
+            except Exception:
+                gemini_status = "error"
+
+    degraded = False
+    if db_status == "error":
+        degraded = True
+    if (
+        settings.resolved_llm_provider == "ollama"
+        or settings.resolved_embedding_provider == "ollama"
+    ) and ollama_status == "error":
+        degraded = True
+    if (
+        settings.resolved_llm_provider == "gemini"
+        or settings.resolved_embedding_provider == "gemini"
+    ) and gemini_status == "error":
+        degraded = True
+
+    status = "degraded" if degraded else "ok"
+    return HealthResponse(
+        status=status, database=db_status, ollama=ollama_status, gemini=gemini_status
+    )

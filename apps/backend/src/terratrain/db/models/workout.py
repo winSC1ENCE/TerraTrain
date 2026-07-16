@@ -10,9 +10,7 @@ from terratrain.db.base import Base, TimestampMixin
 class Workout(Base, TimestampMixin):
     __tablename__ = "workouts"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     athlete_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("athletes.id", ondelete="CASCADE"), nullable=False
     )

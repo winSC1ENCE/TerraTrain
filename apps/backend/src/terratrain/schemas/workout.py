@@ -40,9 +40,7 @@ class WorkoutUpdate(BaseModel):
     name: str | None = None
     structured_text: str | None = None
     coach_notes: str | None = None
-    status: str | None = Field(
-        default=None, pattern="^(draft|approved|pushed|completed|archived)$"
-    )
+    status: str | None = Field(default=None, pattern="^(draft|approved|pushed|completed|archived)$")
     scheduled_date: date | None = None
 
 

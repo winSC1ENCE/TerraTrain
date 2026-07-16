@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # Gemini
     gemini_api_key: str = ""
-    gemini_chat_model: str = "models/gemini-2.5-flash"
+    gemini_chat_model: str = "models/gemini-3.5-flash"
     gemini_embed_model: str = "models/gemini-embedding-001"
     gemini_api_base: str = "https://generativelanguage.googleapis.com/v1beta/openai"
 

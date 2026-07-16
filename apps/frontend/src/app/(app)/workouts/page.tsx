@@ -1,9 +1,8 @@
 "use client";
-
 import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Dumbbell, Send } from "lucide-react";
+import { ChevronDown, Dumbbell, Send, Pencil } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
@@ -27,6 +26,11 @@ export default function WorkoutsPage() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editStructuredText, setEditStructuredText] = useState("");
+
   const { data: workouts } = useQuery({
     queryKey: ["workouts", athlete?.id],
     queryFn: () => api.workouts.list(athlete!.id),
@@ -37,6 +41,15 @@ export default function WorkoutsPage() {
     mutationFn: api.workouts.push,
     onSuccess: () =>
       void queryClient.invalidateQueries({ queryKey: ["workouts", athlete?.id] }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, name, structured_text }: { id: string; name: string; structured_text: string }) =>
+      api.workouts.update(id, { name, structured_text }),
+    onSuccess: () => {
+      setEditingId(null);
+      void queryClient.invalidateQueries({ queryKey: ["workouts", athlete?.id] });
+    },
   });
 
   if (!athlete) return null;
@@ -60,6 +73,59 @@ export default function WorkoutsPage() {
         <div className="space-y-3">
           {workouts.map((w) => {
             const isOpen = expanded === w.id;
+            const isEditing = editingId === w.id;
+
+            if (isEditing) {
+              return (
+                <Card key={w.id}>
+                  <CardBody className="pt-4 space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-text-muted">Workout-Name</label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full px-3 py-2 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-text-muted">Intervals.icu Schritte</label>
+                      <textarea
+                        value={editStructuredText}
+                        onChange={(e) => setEditStructuredText(e.target.value)}
+                        rows={6}
+                        className="w-full px-3 py-2 text-sm font-mono bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 justify-end pt-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Abbrechen
+                      </Button>
+                      <Button
+                        size="sm"
+                        loading={updateMutation.isPending}
+                        onClick={() =>
+                          updateMutation.mutate({
+                            id: w.id,
+                            name: editName,
+                            structured_text: editStructuredText,
+                          })
+                        }
+                      >
+                        Speichern
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            }
+
             return (
               <Card key={w.id}>
                 <CardBody className="pt-4">
@@ -96,8 +162,8 @@ export default function WorkoutsPage() {
                     </div>
                   )}
 
-                  {w.status === "draft" && w.structured_text && (
-                    <div className="mt-3">
+                  <div className="mt-3 flex gap-2">
+                    {w.status === "draft" && w.structured_text && (
                       <Button
                         size="sm"
                         variant="secondary"
@@ -107,8 +173,20 @@ export default function WorkoutsPage() {
                         <Send className="h-3.5 w-3.5" />
                         {t.workouts.push}
                       </Button>
-                    </div>
-                  )}
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingId(w.id);
+                        setEditName(w.name);
+                        setEditStructuredText(w.structured_text ?? "");
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Bearbeiten
+                    </Button>
+                  </div>
                 </CardBody>
               </Card>
             );

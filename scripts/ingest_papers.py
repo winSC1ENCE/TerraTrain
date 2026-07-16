@@ -32,6 +32,7 @@ async def ingest_all() -> None:
             chunks = await ingestor.ingest_path(pdf)
             print(f"  → {chunks} chunks")
             total += chunks
+            await asyncio.sleep(4.0)
         print(f"\nDone. {len(pdfs)} files, {total} total chunks.")
 
 

@@ -232,7 +232,19 @@ class CoachingAgent:
                     "event": "thinking",
                     "data": f"Plan rejected ({len(validation_errors)} issue(s)) — asking coach to revise...",
                 }
-                messages.append({"role": "tool", "content": feedback})
+                final_answer_id = None
+                for tc in tool_calls:
+                    if tc.get("function", {}).get("name") == "final_answer":
+                        final_answer_id = tc.get("id")
+                        break
+                tool_msg = {
+                    "role": "tool",
+                    "content": feedback,
+                    "name": "final_answer",
+                }
+                if final_answer_id:
+                    tool_msg["tool_call_id"] = final_answer_id
+                messages.append(tool_msg)
                 continue
 
             yield {
@@ -484,9 +496,26 @@ When ready, call final_answer with the complete workout plan.
             "Content-Type": "application/json",
         }
 
+        import json
+        formatted_messages = []
+        for msg in messages:
+            msg_copy = dict(msg)
+            if "tool_calls" in msg_copy:
+                tool_calls_copy = []
+                for tc in msg_copy["tool_calls"]:
+                    tc_copy = dict(tc)
+                    fn_copy = dict(tc_copy.get("function", {}))
+                    args = fn_copy.get("arguments")
+                    if isinstance(args, dict):
+                        fn_copy["arguments"] = json.dumps(args)
+                    tc_copy["function"] = fn_copy
+                    tool_calls_copy.append(tc_copy)
+                msg_copy["tool_calls"] = tool_calls_copy
+            formatted_messages.append(msg_copy)
+
         payload = {
             "model": settings.gemini_chat_model,
-            "messages": messages,
+            "messages": formatted_messages,
             "tools": TOOLS,
             "temperature": 0.3,
         }
@@ -523,13 +552,14 @@ When ready, call final_answer with the complete workout plan.
                         args = json.loads(args)
                     except Exception:
                         args = {}
-                mapped_tool_calls.append(
-                    {
-                        "id": tc.get("id"),
-                        "type": "function",
-                        "function": {"name": fn.get("name"), "arguments": args},
-                    }
-                )
+                mapped_tc = {
+                    "id": tc.get("id"),
+                    "type": "function",
+                    "function": {"name": fn.get("name"), "arguments": args},
+                }
+                if "extra_content" in tc:
+                    mapped_tc["extra_content"] = tc["extra_content"]
+                mapped_tool_calls.append(mapped_tc)
 
             normalized_msg = {
                 "role": "assistant",

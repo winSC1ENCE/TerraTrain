@@ -73,8 +73,8 @@ class RagService:
         ]
 
     @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_random_exponential(min=1, max=10),
+        stop=stop_after_attempt(8),
+        wait=wait_random_exponential(min=2, max=30),
         retry=retry_if_exception(_is_retryable_exception),
         reraise=True,
     )

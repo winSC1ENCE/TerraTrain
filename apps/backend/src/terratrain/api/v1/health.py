@@ -53,17 +53,6 @@ async def readiness() -> HealthResponse:
         gemini_status = "ok"
         if not settings.gemini_api_key:
             gemini_status = "error"
-        else:
-            try:
-                async with httpx.AsyncClient(timeout=5) as client:
-                    resp = await client.get(
-                        f"{settings.gemini_api_base}/models",
-                        headers={"Authorization": f"Bearer {settings.gemini_api_key}"},
-                    )
-                    if resp.status_code != 200:
-                        gemini_status = "error"
-            except Exception:
-                gemini_status = "error"
 
     degraded = False
     if db_status == "error":

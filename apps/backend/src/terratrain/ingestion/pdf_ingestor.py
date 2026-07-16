@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import io
 import uuid
+import asyncio
 from pathlib import Path
 
 import httpx
@@ -81,6 +82,9 @@ class PdfIngestor:
                 self._session.add(chunk)
             total += len(batch)
 
+            if batch_start + batch_size < len(chunks):
+                await asyncio.sleep(3.0)
+
         await self._session.commit()
         logger.info("pdf_ingestor.done", filename=filename, chunks=total)
         return total
@@ -143,8 +147,8 @@ class PdfIngestor:
         return chunks
 
     @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_random_exponential(min=1, max=10),
+        stop=stop_after_attempt(8),
+        wait=wait_random_exponential(min=2, max=30),
         retry=retry_if_exception(_is_retryable_exception),
         reraise=True,
     )

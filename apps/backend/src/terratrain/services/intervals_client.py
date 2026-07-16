@@ -100,19 +100,29 @@ class IntervalsClient:
     )
     async def push_workout(self, workout: object) -> str:
         """Push a workout to Intervals.icu calendar and return the event ID."""
+        sport_lower = workout.sport.lower() if hasattr(workout, "sport") and workout.sport else "cycling" # type: ignore[attr-defined]
+        event_type = "Ride"
+        if "run" in sport_lower:
+            event_type = "Run"
+        elif "swim" in sport_lower:
+            event_type = "Swim"
+
         payload = {
+            "category": "WORKOUT",
             "name": workout.name,  # type: ignore[attr-defined]
-            "type": workout.sport.capitalize(),  # type: ignore[attr-defined]
+            "type": event_type,
             "description": workout.structured_text,  # type: ignore[attr-defined]
         }
         if workout.scheduled_date:  # type: ignore[attr-defined]
-            payload["start_date_local"] = str(workout.scheduled_date)  # type: ignore[attr-defined]
+            payload["start_date_local"] = f"{workout.scheduled_date.isoformat()}T09:00:00"  # type: ignore[attr-defined]
 
         async with self._client() as c:
             resp = await c.post(
                 f"{self._base}/athlete/{self._athlete_id}/events",
                 json=payload,
             )
+            if resp.status_code >= 400:
+                logger.error("intervals_push_failed", payload=payload, status_code=resp.status_code, response_text=resp.text)
             resp.raise_for_status()
             data = resp.json()
             return str(data.get("id", ""))

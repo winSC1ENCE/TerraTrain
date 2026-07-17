@@ -26,6 +26,7 @@
 | | |
 |---|---|
 | 🧠 **AI Coach** | Lokales LLM (Ollama) generiert strukturierte Workouts als Tool-Use-Agent — mit Validierungs-Schleife gegen physiologisch unrealistische Pläne |
+| 📅 **Wochenplaner** | **NEU**: Plant eine komplette Woche mit Mesozyklus-Periodisierung (3:1 oder 2:1), auto-erkennt den aktuellen Zyklusstand via Intervals.icu-TSS und erlaubt beliebig viele Einheiten pro Tag |
 | 🗺️ **Terrain-Analyse** | GPX-Upload → automatische Erkennung von Anstiegen (Gradient, VAM, Kategorie) via Polars |
 | 📊 **Trainingssteuerung** | CTL/ATL/TSB (Performance Management Chart) aus echten Intervals.icu-Daten, inkl. Fallback auf Intervals.icu-Wellness für Strava-Athleten |
 | 📚 **RAG-Wissensbasis** | Trainingswissenschaftliche PDFs hochladen → der Coach zitiert echte Forschung statt nur Modellwissen |

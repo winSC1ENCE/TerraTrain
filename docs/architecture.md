@@ -53,6 +53,8 @@ erDiagram
     ATHLETES ||--o{ WORKOUTS : "erhält"
     ATHLETES ||--o{ TRAINING_SESSIONS : "synchronisiert"
     ATHLETES ||--o| STRAVA_TOKENS : "verbindet"
+    ATHLETES ||--o{ WEEKLY_PLANS : "erstellt"
+    WEEKLY_PLANS ||--o{ WORKOUTS : "beinhaltet"
     ROUTES ||--o{ WORKOUTS : "referenziert"
 
     ATHLETES {
@@ -66,6 +68,15 @@ erDiagram
         int lthr
         jsonb training_zones
         text intervals_api_key_encrypted
+    }
+    WEEKLY_PLANS {
+        uuid id PK
+        uuid athlete_id FK
+        date start_date
+        string mesocycle_type
+        string week_type
+        text coach_rationale
+        text notes
     }
     ROUTES {
         uuid id PK
@@ -81,6 +92,7 @@ erDiagram
         uuid id PK
         uuid athlete_id FK
         uuid route_id FK
+        uuid weekly_plan_id FK
         string name
         string workout_type
         string status
@@ -199,3 +211,17 @@ Pläne ab, die diese Regeln verletzen:
 Verstößt ein von der KI generierter Plan gegen eine Regel, bekommt die KI die konkrete Fehlermeldung
 als Tool-Ergebnis zurück und darf **einmal** nachbessern, bevor der Stream mit einer Fehlermeldung
 endet. Das ist der Fix für den ursprünglichen Fall "4×45 Min bei 100 % FTP".
+
+## Ablauf: KI-Wochenplaner-Agent & Mesozyklus-Erkennung
+
+Der Wochenplaner ([`WeeklyCoachingAgent`](file:///home/winscience/src/github/TerraTrain/apps/backend/src/terratrain/services/weekly_coaching_agent.py)) koordiniert die Erstellung eines periodisierten Wochenplans:
+
+1. **Mesozyklus-Erkennung ([`MesocycleDetector`](file:///home/winscience/src/github/TerraTrain/apps/backend/src/terratrain/services/mesocycle_detector.py))**:
+   - Berechnet die wöchentliche TSS-Summe der letzten 4 Wochen aus den importierten Aktivitätsdaten (`TRAINING_SESSIONS`).
+   - Schlägt basierend auf Periodisierungs-Zyklen (`3-1` oder `2-1`) und dem Belastungsverlauf den Wochentyp vor (z. B. Erholungswoche, falls 3 Wochen progressive TSS-Belastung vorausgingen).
+2. **Generierungs-Loop**:
+   - Sendet den gesamten Wochenplanentwurf (ausgewählte Wochentage, GPX-Routen, Zieldauern) an das LLM.
+   - Das LLM liefert über ein strukturiertes JSON-Schema alle Workouts der Woche in einem einzigen Tool-Call zurück.
+   - Der Agent führt für jedes generierte Workout die physiologische Validierungsprüfung ([`WorkoutFormatter.validate`](file:///home/winscience/src/github/TerraTrain/apps/backend/src/terratrain/services/workout_formatter.py)) durch und fordert im Fehlerfall Nachbesserung an.
+   - Nach erfolgreicher Validierung werden der `WeeklyPlan` sowie die einzelnen `Workout`-Einträge in der PostgreSQL-Datenbank abgelegt.
+

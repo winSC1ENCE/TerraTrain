@@ -13,6 +13,7 @@ So benutzt du TerraTrain — vom ersten Start bis zum ersten KI-generierten Work
 - [3. Dashboard](#3-dashboard)
 - [4. Routen hochladen](#4-routen-hochladen)
 - [5. Ein Workout vom AI Coach erstellen](#5-ein-workout-vom-ai-coach-erstellen)
+- [5.1. Einen kompletten Wochenplan erstellen (Mesozyklus-Planer)](#51-einen-kompletten-wochenplan-erstellen-mesozyklus-planer)
 - [6. Workouts verwalten](#6-workouts-verwalten)
 - [7. Wissensbasis füttern (RAG)](#7-wissensbasis-füttern-rag)
 - [8. Einstellungen](#8-einstellungen)
@@ -89,6 +90,21 @@ erscheint als Karte mit:
 Jeder generierte Plan durchläuft eine automatische Plausibilitätsprüfung (siehe
 [`docs/architecture.md`](architecture.md#physiologische-validierung)) — unrealistische Intervalle
 wie "4×45 Minuten bei 100 % FTP" werden abgelehnt, bevor du sie überhaupt siehst.
+
+## 5.1. Einen kompletten Wochenplan erstellen (Mesozyklus-Planer)
+
+Auf `/weekly-planner` planst du deine gesamte Trainingswoche nach Periodisierungs-Muster:
+
+1. **Mesozyklus-Vorauswahl**:
+   - Wähle ein **Startdatum** (muss ein Montag sein) und das **Periodisierungs-Modell** (`3-1` oder `2-1` Zyklus).
+   - Die App ruft automatisch deine TSS-Historie der letzten 4 Wochen aus Intervals.icu ab. Auf Basis des Belastungsverlaufs (z. B. Erholungs-Drop in W-1) schlägt dir der AI Coach den optimalen Wochentyp vor (z. B. *Belastungswoche 2* oder *Erholungswoche*). Du kannst diese Empfehlung jederzeit überschreiben.
+2. **Flexible Tagesplanung**:
+   - Du kannst für jeden Wochentag beliebig viele separate Trainingseinheiten hinzufügen (`+ Einheit hinzufügen`).
+   - Stelle die Zieldauer der Einheit ein, ordne optional eine GPX-Route zu (der Coach plant Intervalle dann an die Steigungen der Route) und füge spezifische Tagesnotizen hinzu.
+   - Tage ohne Einheiten gelten als Ruhetage.
+3. **Generierung & Editierung**:
+   - Nach Klick auf **Wochenplan erstellen** generiert der Coach die Workouts für alle geplanten Einheiten in einem zusammenhängenden Entwurf.
+   - Du siehst die periodisierte Wochenbegründung des Coaches und kannst jedes Workout einzeln ausklappen, den strukturierten Text direkt im Editor anpassen und Einheiten einzeln oder in einer Batch-Aktion (**Ganze Woche übertragen**) an deinen Intervals.icu-Kalender senden.
 
 ## 6. Workouts verwalten
 

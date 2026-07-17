@@ -65,3 +65,22 @@ def test_classify_climb_hc():
 def test_classify_climb_cat4():
     category = GpxAnalyzer._classify_climb(ele_gain_m=100, avg_grade_pct=5.0)
     assert category in {"cat4", None}
+
+
+def test_elevation_smoothing_reduces_noise():
+    spikey_gpx = """<?xml version="1.0"?>
+    <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+      <trk><trkseg>
+        <trkpt lat="47.0" lon="8.0"><ele>500</ele></trkpt>
+        <trkpt lat="47.001" lon="8.001"><ele>520</ele></trkpt>
+        <trkpt lat="47.002" lon="8.002"><ele>500</ele></trkpt>
+        <trkpt lat="47.003" lon="8.003"><ele>520</ele></trkpt>
+        <trkpt lat="47.004" lon="8.004"><ele>500</ele></trkpt>
+      </trkseg></trk>
+    </gpx>"""
+    result = GpxAnalyzer.analyze(spikey_gpx)
+    assert result["max_elevation_m"] < 520.0
+    assert result["min_elevation_m"] > 500.0
+    # Spikey gain without smoothing would be 40.0. With smoothing it is around 5.4.
+    assert result["elevation_gain_m"] < 15.0
+

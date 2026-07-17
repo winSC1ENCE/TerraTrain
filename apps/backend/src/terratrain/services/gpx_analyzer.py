@@ -40,6 +40,13 @@ class GpxAnalyzer:
             return GpxAnalyzer._empty_result()
 
         df = pl.DataFrame(points)
+        
+        # Smooth elevation data using a rolling mean to eliminate high-frequency GPS noise/jitter.
+        # Using a centered window of 5 points, with min_periods=1 to support edges.
+        df = df.with_columns(
+            pl.col("ele").rolling_mean(window_size=5, min_periods=1, center=True).alias("ele")
+        )
+        
         df = GpxAnalyzer._compute_distances(df)
         df = GpxAnalyzer._compute_grades(df)
 

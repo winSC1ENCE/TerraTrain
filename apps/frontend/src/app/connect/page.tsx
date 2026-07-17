@@ -75,9 +75,7 @@ export default function ConnectPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15">
-            <span className="h-3 w-3 rounded-full bg-accent" />
-          </div>
+          <img src="/terratrain_logo.png" alt="TerraTrain Logo" className="mx-auto mb-4 h-16 w-auto object-contain" />
           <h1 className="text-xl font-bold tracking-tight">{t.connect.title}</h1>
           <p className="mt-1 text-sm text-text-muted">{t.connect.subtitle}</p>
         </div>

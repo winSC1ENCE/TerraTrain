@@ -75,7 +75,7 @@ export default function ConnectPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <img src="/terratrain_logo.png" alt="TerraTrain Logo" className="mx-auto mb-4 h-16 w-auto object-contain" />
+          <img src="/terratrain_logo.svg" alt="TerraTrain Logo" className="mx-auto mb-4 h-16 w-auto" />
           <h1 className="text-xl font-bold tracking-tight">{t.connect.title}</h1>
           <p className="mt-1 text-sm text-text-muted">{t.connect.subtitle}</p>
         </div>

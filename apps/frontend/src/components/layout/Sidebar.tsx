@@ -31,7 +31,7 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex flex-col w-16 lg:w-60 shrink-0 border-r border-border bg-surface min-h-screen sticky top-0">
       <div className="flex items-center gap-2.5 px-4 lg:px-5 h-14 border-b border-border">
-        <img src="/terratrain_icon.png" alt="TerraTrain Icon" className="h-6 w-6 shrink-0 object-contain" />
+        <img src="/terratrain_icon.svg" alt="TerraTrain Icon" className="h-6 w-6 shrink-0" />
         <span className="hidden lg:block text-sm font-bold tracking-tight">
           TerraTrain
         </span>

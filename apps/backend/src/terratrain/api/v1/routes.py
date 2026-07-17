@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from terratrain.api.deps import get_session
 from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.route import Route
-from terratrain.schemas.route import RouteResponse
+from terratrain.schemas.route import RouteResponse, RouteUpdateRequest
 from terratrain.services.gpx_analyzer import GpxAnalyzer
 
 logger = structlog.get_logger()
@@ -75,3 +75,18 @@ async def delete_route(
         raise HTTPException(status_code=404, detail="Route not found")
     await session.delete(route)
     await session.commit()
+
+
+@router.put("/routes/{route_id}", response_model=RouteResponse)
+async def update_route(
+    route_id: uuid.UUID,
+    body: RouteUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+) -> Route:
+    route = await session.get(Route, route_id)
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+    route.name = body.name
+    await session.commit()
+    await session.refresh(route)
+    return route

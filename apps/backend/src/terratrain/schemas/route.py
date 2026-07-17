@@ -32,3 +32,8 @@ class RouteResponse(BaseModel):
     surface_type: str | None
     analysis: dict
     created_at: datetime
+
+
+class RouteUpdateRequest(BaseModel):
+    name: str
+

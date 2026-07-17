@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Map, Mountain, Ruler } from "lucide-react";
+import { Check, Map, Mountain, Pencil, Ruler, Trash, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
@@ -16,6 +17,10 @@ export default function RoutesPage() {
   const t = useT();
   const queryClient = useQueryClient();
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
     queryFn: () => api.routes.list(athlete!.id),
@@ -23,6 +28,40 @@ export default function RoutesPage() {
   });
 
   if (!athlete) return null;
+
+  const startEdit = (id: string, currentName: string) => {
+    setEditingId(id);
+    setEditName(currentName);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName("");
+  };
+
+  const handleSaveRename = async (id: string) => {
+    if (!editName.trim()) return;
+    setIsSaving(true);
+    try {
+      await api.routes.update(id, { name: editName.trim() });
+      void queryClient.invalidateQueries({ queryKey: ["routes", athlete.id] });
+      setEditingId(null);
+    } catch (err) {
+      console.error("Failed to rename route", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Möchtest du diese Route wirklich löschen?")) return;
+    try {
+      await api.routes.delete(id);
+      void queryClient.invalidateQueries({ queryKey: ["routes", athlete.id] });
+    } catch (err) {
+      console.error("Failed to delete route", err);
+    }
+  };
 
   async function handleUpload(file: File): Promise<string> {
     const form = new FormData();
@@ -52,12 +91,62 @@ export default function RoutesPage() {
           {routes.map((r) => (
             <Card key={r.id}>
               <CardBody className="pt-4">
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-text">{r.name}</h2>
-                  {r.terrain_score != null && (
-                    <Badge variant="accent">
-                      {t.routes.terrainScore} {(r.terrain_score * 100).toFixed(0)}%
-                    </Badge>
+                <div className="mb-2 flex items-center justify-between gap-2 min-h-8">
+                  {editingId === r.id ? (
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="px-2 py-1 text-xs bg-bg border border-border rounded flex-1 focus:outline-none focus:ring-1 focus:ring-accent text-text"
+                        disabled={isSaving}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRename(r.id)}
+                        disabled={isSaving}
+                        className="p-1 hover:text-success text-text-muted transition-colors"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        disabled={isSaving}
+                        className="p-1 hover:text-danger text-text-muted transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between w-full gap-2">
+                      <div className="flex items-center gap-1.5 group">
+                        <h2 className="text-sm font-semibold text-text">{r.name}</h2>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(r.id, r.name)}
+                          className="p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-accent text-text-muted transition-opacity transition-colors"
+                          title="Umbenennen"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(r.id)}
+                          className="p-1 text-text-muted hover:text-danger hover:bg-danger/10 rounded transition-colors"
+                          title="Löschen"
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </button>
+                        {r.terrain_score != null && (
+                          <Badge variant="accent">
+                            {t.routes.terrainScore} {(r.terrain_score * 100).toFixed(0)}%
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div className="flex gap-4 text-xs text-text-muted">

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BookOpen,
   Brain,
+  Calendar,
   Dumbbell,
   LayoutDashboard,
   Map,
@@ -20,6 +21,7 @@ export function Sidebar() {
   const items = [
     { href: "/", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/coach", label: t.nav.coach, icon: Brain },
+    { href: "/weekly-planner", label: t.nav.weeklyPlanner, icon: Calendar },
     { href: "/routes", label: t.nav.routes, icon: Map },
     { href: "/workouts", label: t.nav.workouts, icon: Dumbbell },
     { href: "/knowledge", label: t.nav.knowledge, icon: BookOpen },
@@ -65,6 +67,7 @@ export function MobileTabBar() {
   const items = [
     { href: "/", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/coach", label: t.nav.coach, icon: Brain },
+    { href: "/weekly-planner", label: t.nav.weeklyPlanner, icon: Calendar },
     { href: "/routes", label: t.nav.routes, icon: Map },
     { href: "/workouts", label: t.nav.workouts, icon: Dumbbell },
     { href: "/knowledge", label: t.nav.knowledge, icon: BookOpen },

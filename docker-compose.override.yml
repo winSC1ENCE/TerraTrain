@@ -6,6 +6,8 @@ services:
       - ./apps/backend/src:/app/src:cached
       - ./data:/data
       - ./scripts:/app/scripts:cached
+      - ./apps/backend/alembic:/app/alembic:cached
+      - ./apps/backend/alembic.ini:/app/alembic.ini:cached
     command: >
       uvicorn terratrain.main:app
       --reload

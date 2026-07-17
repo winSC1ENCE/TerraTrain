@@ -50,6 +50,7 @@ class WorkoutResponse(BaseModel):
     id: uuid.UUID
     athlete_id: uuid.UUID
     route_id: uuid.UUID | None
+    weekly_plan_id: uuid.UUID | None = None
     intervals_workout_id: str | None
     name: str
     sport: str

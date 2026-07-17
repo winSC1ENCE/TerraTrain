@@ -37,7 +37,7 @@ class WorkoutFormatter:
     @staticmethod
     def to_intervals_icu(plan: WorkoutPlan) -> str:
         """Convert a WorkoutPlan to Intervals.icu workout text."""
-        parts: list[str] = []
+        lines: list[str] = []
 
         i = 0
         phases = plan.phases
@@ -48,14 +48,36 @@ class WorkoutFormatter:
             # Look-ahead: check for repeat groups
             if phase.repeat > 1 and i + 1 < len(phases):
                 group_phases = WorkoutFormatter._collect_group(phases, i)
+                
+                # Add empty line before repeat block if needed
+                if lines and lines[-1] != "":
+                    lines.append("")
+                
                 block = WorkoutFormatter._format_repeat_block(group_phases, phase.repeat)
-                parts.append(block)
+                lines.append(block)
+                
+                # Add empty line after repeat block
+                lines.append("")
                 i += len(group_phases)
             else:
-                parts.append(WorkoutFormatter._format_phase(phase))
+                lines.append(WorkoutFormatter._format_phase(phase))
                 i += 1
 
-        return "\n".join(parts)
+        # Clean up consecutive empty lines and trailing empty lines
+        final_lines: list[str] = []
+        for item in lines:
+            sublines = item.split("\n")
+            for line in sublines:
+                if line == "":
+                    if final_lines and final_lines[-1] != "":
+                        final_lines.append("")
+                else:
+                    final_lines.append(line)
+        
+        if final_lines and final_lines[-1] == "":
+            final_lines.pop()
+
+        return "\n".join(final_lines)
 
     @staticmethod
     def _collect_group(phases: list[WorkoutPhase], start: int) -> list[WorkoutPhase]:
@@ -73,37 +95,42 @@ class WorkoutFormatter:
     def _format_phase(phase: WorkoutPhase) -> str:
         target = WorkoutFormatter._format_target(phase)
         duration_str = WorkoutFormatter._format_duration(phase.duration_min)
-        name = phase.name
-        return f"{name}({duration_str} {target})"
+        name = phase.name.strip()
+        if name:
+            return f"- {name} {duration_str} {target}"
+        return f"- {duration_str} {target}"
 
     @staticmethod
     def _format_repeat_block(phases: list[WorkoutPhase], repeat: int) -> str:
-        inner_parts = []
+        lines = [f"{repeat}x"]
         for p in phases:
             target = WorkoutFormatter._format_target(p)
             duration_str = WorkoutFormatter._format_duration(p.duration_min)
-            inner_parts.append(f"{duration_str} {target}")
-        inner = ", ".join(inner_parts)
-        return f"{repeat}x({inner})"
+            name = p.name.strip()
+            if name:
+                lines.append(f"- {name} {duration_str} {target}")
+            else:
+                lines.append(f"- {duration_str} {target}")
+        return "\n".join(lines)
 
     @staticmethod
     def _format_target(phase: WorkoutPhase) -> str:
         if phase.target_power_pct is not None:
-            return f"@{int(phase.target_power_pct)}%FTP"
+            return f"{int(phase.target_power_pct)}%"
         # HR target only if it's a real bpm value/range ("140" / "130-145").
         # LLMs sometimes put a zone label ("Z2") here — that would render as
         # invalid "@Z2bpm", so fall through to the zone power map instead.
         if phase.target_hr_zone is not None and _HR_PATTERN.match(phase.target_hr_zone.strip()):
-            return f"@{phase.target_hr_zone.strip()}bpm"
+            return f"{phase.target_hr_zone.strip()}bpm"
         pct = _ZONE_POWER_MAP.get(phase.zone.upper(), 65)
-        return f"@{pct}%FTP"
+        return f"{pct}%"
 
     @staticmethod
     def _format_duration(minutes: float) -> str:
         total_sec = int(minutes * 60)
         if total_sec % 60 == 0:
-            return f"{int(minutes)}min"
-        return f"{total_sec}sec"
+            return f"{int(minutes)}m"
+        return f"{total_sec}s"
 
     @staticmethod
     def _phase_power_pct(phase: WorkoutPhase) -> float:

@@ -3,12 +3,14 @@ import { cn } from "@/lib/utils";
 export function Card({
   className,
   children,
+  onClick,
 }: {
   className?: string;
   children: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <div className={cn("bg-surface border border-border rounded-card", className)}>
+    <div className={cn("bg-surface border border-border rounded-card", className)} onClick={onClick}>
       {children}
     </div>
   );
@@ -17,12 +19,14 @@ export function Card({
 export function CardHeader({
   className,
   children,
+  onClick,
 }: {
   className?: string;
   children: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <div className={cn("px-5 pt-5 pb-3 flex items-start justify-between", className)}>
+    <div className={cn("px-5 pt-5 pb-3 flex items-start justify-between", className)} onClick={onClick}>
       {children}
     </div>
   );

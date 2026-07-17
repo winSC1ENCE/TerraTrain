@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from terratrain.config import get_settings
 from terratrain.db.base import Base
+import terratrain.db.models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

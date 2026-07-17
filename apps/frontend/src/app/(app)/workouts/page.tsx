@@ -2,9 +2,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Dumbbell, Send, Pencil } from "lucide-react";
+import { ChevronDown, Dumbbell, Send, Pencil, Trash } from "lucide-react";
 import { api } from "@/lib/api";
-import { useAthlete } from "@/stores/athlete-store";
+import { useAthlete, useAthleteStore } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +12,8 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn, formatDate, formatDuration } from "@/lib/utils";
+import { PhaseBar } from "@/components/coach/PhaseBar";
+import type { WorkoutPhase } from "@/lib/types";
 
 const statusVariant: Record<string, "default" | "info" | "success" | "accent"> = {
   draft: "default",
@@ -22,6 +24,7 @@ const statusVariant: Record<string, "default" | "info" | "success" | "accent"> =
 
 export default function WorkoutsPage() {
   const athlete = useAthlete();
+  const language = useAthleteStore((s) => s.language);
   const t = useT();
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -52,6 +55,12 @@ export default function WorkoutsPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: api.workouts.delete,
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: ["workouts", athlete?.id] }),
+  });
+
   if (!athlete) return null;
 
   return (
@@ -74,6 +83,10 @@ export default function WorkoutsPage() {
           {workouts.map((w) => {
             const isOpen = expanded === w.id;
             const isEditing = editingId === w.id;
+            const phases = (w.llm_plan as { phases?: WorkoutPhase[] })?.phases;
+            const maxDuration = phases?.length
+              ? Math.max(...phases.map((p) => p.duration_min))
+              : 0;
 
             if (isEditing) {
               return (
@@ -144,7 +157,7 @@ export default function WorkoutsPage() {
                     </Badge>
                   </div>
 
-                  {w.structured_text && (
+                  {(w.structured_text || (phases && phases.length > 0) || w.llm_reasoning) && (
                     <button
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : w.id)}
@@ -153,12 +166,56 @@ export default function WorkoutsPage() {
                       <ChevronDown
                         className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")}
                       />
-                      Intervals.icu
+                      {language === "de"
+                        ? (isOpen ? "Details ausblenden" : "Details anzeigen")
+                        : (isOpen ? "Hide details" : "Show details")}
                     </button>
                   )}
-                  {isOpen && w.structured_text && (
-                    <div className="mt-2">
-                      <CodeBlock code={w.structured_text} />
+                  {isOpen && (
+                    <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
+                      {phases && phases.length > 0 && (
+                        <div className="space-y-2">
+                          <h3 className="text-xs font-semibold text-text-secondary">
+                            {t.coach.phases}
+                          </h3>
+                          <div className="space-y-1.5">
+                            {phases.map((p, idx) => (
+                              <PhaseBar key={idx} phase={p} maxDurationMin={maxDuration} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {w.structured_text && (
+                        <div className="space-y-1">
+                          <h3 className="text-xs font-semibold text-text-secondary">
+                            Intervals.icu
+                          </h3>
+                          <CodeBlock code={w.structured_text} />
+                        </div>
+                      )}
+
+                      {w.llm_reasoning && (
+                        <div className="space-y-1">
+                          <h3 className="text-xs font-semibold text-text-secondary">
+                            {t.coach.reasoning}
+                          </h3>
+                          <p className="text-xs leading-relaxed text-text-muted">
+                            {w.llm_reasoning}
+                          </p>
+                        </div>
+                      )}
+
+                      {w.coach_notes && (
+                        <div className="space-y-1">
+                          <h3 className="text-xs font-semibold text-text-secondary">
+                            {t.coach.notes}
+                          </h3>
+                          <p className="text-xs leading-relaxed text-text-muted">
+                            {w.coach_notes}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -185,6 +242,20 @@ export default function WorkoutsPage() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       Bearbeiten
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-danger hover:text-danger hover:bg-danger/10"
+                      loading={deleteMutation.isPending && deleteMutation.variables === w.id}
+                      onClick={() => {
+                        if (confirm("Möchtest du dieses Workout wirklich löschen?")) {
+                          deleteMutation.mutate(w.id);
+                        }
+                      }}
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                      Löschen
                     </Button>
                   </div>
                 </CardBody>

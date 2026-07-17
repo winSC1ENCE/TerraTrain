@@ -25,9 +25,9 @@ def test_simple_warmup_interval_cooldown():
         ]
     )
     text = WorkoutFormatter.to_intervals_icu(plan)
-    assert "@65%FTP" in text
-    assert "@95%FTP" in text
-    assert "@50%FTP" in text
+    assert "- Warmup 15m 65%" in text
+    assert "- Threshold 20m 95%" in text
+    assert "- Cooldown 10m 50%" in text
 
 
 def test_repeat_block_formatted_correctly():
@@ -52,7 +52,7 @@ def test_repeat_block_formatted_correctly():
         ]
     )
     text = WorkoutFormatter.to_intervals_icu(plan)
-    assert "5x(" in text
+    assert "5x\n- On 4m 110%\n- Off 2m 50%" in text
 
 
 def test_validation_too_short():
@@ -86,11 +86,11 @@ def test_hr_target_uses_bpm():
         ]
     )
     text = WorkoutFormatter.to_intervals_icu(plan)
-    assert "@130-145bpm" in text
+    assert "- Endurance 60m 130-145bpm" in text
 
 
 def test_hr_zone_label_falls_back_to_power():
-    """LLM sometimes writes 'Z2' into target_hr_zone — must NOT render '@Z2bpm'."""
+    """LLM sometimes writes 'Z2' into target_hr_zone — must NOT render 'Z2bpm'."""
     plan = make_plan(
         [
             {"name": "Warmup", "duration_min": 20, "zone": "Z2", "target_hr_zone": "Z2"},
@@ -98,7 +98,7 @@ def test_hr_zone_label_falls_back_to_power():
     )
     text = WorkoutFormatter.to_intervals_icu(plan)
     assert "Z2bpm" not in text
-    assert "@65%FTP" in text  # zone fallback
+    assert "- Warmup 20m 65%" in text  # zone fallback
 
 
 def test_single_hr_value_allowed():
@@ -108,7 +108,7 @@ def test_single_hr_value_allowed():
         ]
     )
     text = WorkoutFormatter.to_intervals_icu(plan)
-    assert "@140bpm" in text
+    assert "- Steady 45m 140bpm" in text
 
 
 def test_validation_rejects_unrealistic_threshold_interval():

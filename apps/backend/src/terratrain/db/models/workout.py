@@ -17,6 +17,9 @@ class Workout(Base, TimestampMixin):
     route_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("routes.id", ondelete="SET NULL"), nullable=True
     )
+    weekly_plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("weekly_plans.id", ondelete="CASCADE"), nullable=True
+    )
     intervals_workout_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -39,3 +42,4 @@ class Workout(Base, TimestampMixin):
     # Relationships
     athlete: Mapped["Athlete"] = relationship(back_populates="workouts")  # type: ignore[name-defined]  # noqa: F821
     route: Mapped["Route | None"] = relationship(back_populates="workouts")  # type: ignore[name-defined]  # noqa: F821
+    weekly_plan: Mapped["WeeklyPlan | None"] = relationship(back_populates="workouts")  # type: ignore[name-defined]  # noqa: F821

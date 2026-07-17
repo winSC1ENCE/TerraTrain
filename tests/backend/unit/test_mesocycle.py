@@ -1,0 +1,80 @@
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from terratrain.db.models.athlete import Athlete
+from terratrain.db.models.session import TrainingSession
+from terratrain.services.mesocycle_detector import MesocycleDetector
+
+
+@pytest.mark.anyio
+async def test_mesocycle_detector_3_1_progressive_load():
+    athlete = Athlete(id=MagicMock(), name="Test Athlete", sport="cycling")
+    session = AsyncMock()
+
+    s4 = MagicMock(spec=TrainingSession)
+    s4.tss = 0.0
+    s3 = MagicMock(spec=TrainingSession)
+    s3.tss = 100.0
+    s2 = MagicMock(spec=TrainingSession)
+    s2.tss = 200.0
+    s1 = MagicMock(spec=TrainingSession)
+    s1.tss = 300.0
+
+    r4 = MagicMock()
+    r4.scalars.return_value.all.return_value = [s4]
+    r3 = MagicMock()
+    r3.scalars.return_value.all.return_value = [s3]
+    r2 = MagicMock()
+    r2.scalars.return_value.all.return_value = [s2]
+    r1 = MagicMock()
+    r1.scalars.return_value.all.return_value = [s1]
+
+    session.execute.side_effect = [r4, r3, r2, r1]
+
+    res = await MesocycleDetector.get_tss_history_and_recommendation(
+        athlete=athlete,
+        session=session,
+        start_date=date(2026, 7, 20),
+        mesocycle_type="3-1",
+    )
+
+    assert res["recommended_week_type"] == "recovery"
+    assert "progressive loading" in res["reasoning"].lower()
+
+
+@pytest.mark.anyio
+async def test_mesocycle_detector_3_1_after_recovery():
+    athlete = Athlete(id=MagicMock(), name="Test Athlete", sport="cycling")
+    session = AsyncMock()
+
+    s4 = MagicMock(spec=TrainingSession)
+    s4.tss = 300.0
+    s3 = MagicMock(spec=TrainingSession)
+    s3.tss = 350.0
+    s2 = MagicMock(spec=TrainingSession)
+    s2.tss = 400.0
+    s1 = MagicMock(spec=TrainingSession)
+    s1.tss = 100.0
+
+    r4 = MagicMock()
+    r4.scalars.return_value.all.return_value = [s4]
+    r3 = MagicMock()
+    r3.scalars.return_value.all.return_value = [s3]
+    r2 = MagicMock()
+    r2.scalars.return_value.all.return_value = [s2]
+    r1 = MagicMock()
+    r1.scalars.return_value.all.return_value = [s1]
+
+    session.execute.side_effect = [r4, r3, r2, r1]
+
+    res = await MesocycleDetector.get_tss_history_and_recommendation(
+        athlete=athlete,
+        session=session,
+        start_date=date(2026, 7, 20),
+        mesocycle_type="3-1",
+    )
+
+    assert res["recommended_week_type"] == "load_1"
+    assert "recovery drop" in res["reasoning"].lower()

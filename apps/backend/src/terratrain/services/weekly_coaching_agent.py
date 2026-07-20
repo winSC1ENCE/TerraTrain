@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, AsyncGenerator
 
 import httpx
@@ -232,6 +232,7 @@ class WeeklyCoachingAgent(CoachingAgent):
 
             assistant_msg = response.get("message", {})
             messages.append(assistant_msg)
+            logger.info("Coaching agent turn response", turn=turn+1, assistant_msg=assistant_msg)
 
             tool_calls = assistant_msg.get("tool_calls", [])
             if not tool_calls:
@@ -466,10 +467,10 @@ For days not requested by the athlete, do NOT output any workouts for that day (
 Do not write long text introductions. You must formulate the weekly plan and call the `final_answer` tool with the structured plan.
 
 Here is an example structure of the arguments for calling `final_answer`:
-{
+{{
   "coach_rationale": "Weekly periodisation rationale explaining the block structure...",
   "daily_workouts": [
-    {
+    {{
       "day_of_week": 1,
       "name": "Tempo Endurance",
       "workout_type": "endurance",
@@ -478,13 +479,13 @@ Here is an example structure of the arguments for calling `final_answer`:
       "rationale": "Controlled aerobic development.",
       "coach_notes": "Stay focused on cadence.",
       "phases": [
-        {"name": "Warmup", "duration_min": 15, "zone": "Z2", "target_power_pct": 65, "repeat": 1},
-        {"name": "Tempo Block", "duration_min": 40, "zone": "Z3", "target_power_pct": 82, "repeat": 1},
-        {"name": "Cooldown", "duration_min": 10, "zone": "Z1", "target_power_pct": 55, "repeat": 1}
+        {{"name": "Warmup", "duration_min": 15, "zone": "Z2", "target_power_pct": 65, "repeat": 1}},
+        {{"name": "Tempo Block", "duration_min": 40, "zone": "Z3", "target_power_pct": 82, "repeat": 1}},
+        {{"name": "Cooldown", "duration_min": 10, "zone": "Z1", "target_power_pct": 55, "repeat": 1}}
       ]
-    }
+    }}
   ]
-}
+}}
 """
         return prompt
 
@@ -534,24 +535,45 @@ Here is an example structure of the arguments for calling `final_answer`:
 
         formatted_messages = []
         for msg in messages:
-            msg_copy = dict(msg)
-            if "tool_calls" in msg_copy:
-                tool_calls_copy = []
-                for tc in msg_copy["tool_calls"]:
-                    tc_copy = dict(tc)
-                    fn_copy = dict(tc_copy.get("function", {}))
-                    args = fn_copy.get("arguments")
-                    if isinstance(args, dict):
-                        fn_copy["arguments"] = json.dumps(args)
-                    tc_copy["function"] = fn_copy
-                    tool_calls_copy.append(tc_copy)
-                msg_copy["tool_calls"] = tool_calls_copy
+            msg_copy = {}
+            for k, v in msg.items():
+                if k in ("role", "content", "name", "tool_call_id"):
+                    msg_copy[k] = v
+                elif k == "tool_calls":
+                    tool_calls_copy = []
+                    for tc in v:
+                        fn = tc.get("function", {})
+                        args = fn.get("arguments", {})
+                        if isinstance(args, dict):
+                            args_str = json.dumps(args)
+                        elif isinstance(args, str):
+                            args_str = args
+                        else:
+                            args_str = "{}"
+                        tc_payload = {
+                            "id": tc.get("id"),
+                            "type": tc.get("type", "function"),
+                            "function": {
+                                "name": fn.get("name"),
+                                "arguments": args_str
+                            }
+                        }
+                        if "extra_content" in tc:
+                            tc_payload["extra_content"] = tc["extra_content"]
+                        tool_calls_copy.append(tc_payload)
+                    msg_copy["tool_calls"] = tool_calls_copy
+            if "content" in msg_copy and msg_copy["content"] is None:
+                msg_copy["content"] = ""
             formatted_messages.append(msg_copy)
+
+        # Gemini's OpenAI translation layer has known issues with multi-turn tool interactions.
+        # By providing only the final_answer tool, we ensure it generates the complete weekly plan in a single turn.
+        gemini_tools = [t for t in WEEK_TOOLS if t["function"]["name"] == "final_answer"]
 
         payload = {
             "model": settings.gemini_chat_model,
             "messages": formatted_messages,
-            "tools": WEEK_TOOLS,
+            "tools": gemini_tools,
             "temperature": 0.3,
         }
 
@@ -575,6 +597,7 @@ Here is an example structure of the arguments for calling `final_answer`:
         resp_data = resp.json()
         try:
             choice = resp_data["choices"][0]
+            logger.info("Gemini raw choice response", choice=choice)
             msg = choice["message"]
 
             tool_calls = msg.get("tool_calls", [])

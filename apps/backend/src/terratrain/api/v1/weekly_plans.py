@@ -21,6 +21,20 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
+@router.get("/athletes/{athlete_id}/weekly-plans", response_model=list[WeeklyPlanResponse])
+async def list_weekly_plans(
+    athlete_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+) -> list[WeeklyPlan]:
+    result = await session.execute(
+        select(WeeklyPlan)
+        .options(selectinload(WeeklyPlan.workouts))
+        .where(WeeklyPlan.athlete_id == athlete_id)
+        .order_by(WeeklyPlan.start_date.desc())
+    )
+    return list(result.scalars().all())
+
+
 @router.get("/athletes/{athlete_id}/weekly-plans/detect")
 async def detect_mesocycle(
     athlete_id: uuid.UUID,

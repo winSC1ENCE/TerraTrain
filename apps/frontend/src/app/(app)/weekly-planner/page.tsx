@@ -6,13 +6,16 @@ import {
   Activity,
   AlertCircle,
   Calendar,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
+  Lock,
   MapPin,
   Pencil,
   Plus,
+  Search,
   Send,
   Sparkles,
   Trash,
@@ -21,7 +24,7 @@ import {
 import { api, API_BASE } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
-import type { Route, Workout, WorkoutPhase } from "@/lib/types";
+import type { Route, WeeklyPlan, Workout, WorkoutPhase } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { CodeBlock } from "@/components/ui/CodeBlock";
@@ -98,13 +101,11 @@ export default function WeeklyPlannerPage() {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   // Persisted plan details
-  const [generatedPlan, setGeneratedPlan] = useState<{
-    id: string;
-    mesocycle_type: string;
-    week_type: string;
-    coach_rationale: string;
-    workouts: Workout[];
-  } | null>(null);
+  const [generatedPlan, setGeneratedPlan] = useState<WeeklyPlan | null>(null);
+
+  // Tab & search states
+  const [activeTab, setActiveTab] = useState<"new" | "history">("new");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Expanded workouts
   const [expandedWorkouts, setExpandedWorkouts] = useState<Record<string, boolean>>({});
@@ -119,6 +120,13 @@ export default function WeeklyPlannerPage() {
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
     queryFn: () => api.routes.list(athlete!.id),
+    enabled: !!athlete,
+  });
+
+  // Fetch weekly plans
+  const { data: weeklyPlans, refetch: refetchPlans } = useQuery({
+    queryKey: ["weeklyPlans", athlete?.id],
+    queryFn: () => api.weeklyPlans.list(athlete!.id),
     enabled: !!athlete,
   });
 
@@ -243,6 +251,7 @@ export default function WeeklyPlannerPage() {
           // Load fully populated weekly plan from backend
           api.weeklyPlans.get(planMeta.weekly_plan_id).then((fullPlan) => {
             setGeneratedPlan(fullPlan);
+            refetchPlans();
           });
           setIsStreaming(false);
         }
@@ -282,6 +291,7 @@ export default function WeeklyPlannerPage() {
       await api.weeklyPlans.delete(generatedPlan.id);
       setGeneratedPlan(null);
       setEvents([]);
+      refetchPlans();
     } catch (err) {
       alert((err as Error).message);
     }
@@ -295,6 +305,7 @@ export default function WeeklyPlannerPage() {
       // Reload weekly plan workouts to show updated statuses
       const fullPlan = await api.weeklyPlans.get(generatedPlan.id);
       setGeneratedPlan(fullPlan);
+      refetchPlans();
       alert(`Erfolgreich ${res.pushed_workout_ids.length} Workouts an Intervals.icu übertragen!`);
     } catch (err) {
       alert((err as Error).message);
@@ -309,6 +320,7 @@ export default function WeeklyPlannerPage() {
       if (generatedPlan) {
         const fullPlan = await api.weeklyPlans.get(generatedPlan.id);
         setGeneratedPlan(fullPlan);
+        refetchPlans();
       }
     } catch (err) {
       alert((err as Error).message);
@@ -331,6 +343,7 @@ export default function WeeklyPlannerPage() {
       });
       const fullPlan = await api.weeklyPlans.get(generatedPlan.id);
       setGeneratedPlan(fullPlan);
+      refetchPlans();
       setEditingWorkout(null);
     } catch (err) {
       alert((err as Error).message);
@@ -343,467 +356,613 @@ export default function WeeklyPlannerPage() {
     setExpandedWorkouts((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  function isPastWeek(startDateStr: string) {
+    if (!startDateStr) return false;
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day; // Monday of current week
+    const currentMonday = new Date(now);
+    currentMonday.setDate(now.getDate() + diff);
+    currentMonday.setHours(0, 0, 0, 0);
+    const planDate = new Date(startDateStr);
+    planDate.setHours(0, 0, 0, 0);
+
+    return planDate.getTime() < currentMonday.getTime();
+  }
+
+  // Filtered plans list
+  const filteredPlans = weeklyPlans?.filter((plan) => {
+    const query = searchQuery.toLowerCase();
+    if (!query) return true;
+    
+    const formattedDate = new Date(plan.start_date).toLocaleDateString("de-CH");
+    return (
+      plan.start_date.toLowerCase().includes(query) ||
+      formattedDate.toLowerCase().includes(query) ||
+      plan.mesocycle_type.toLowerCase().includes(query) ||
+      plan.week_type.toLowerCase().includes(query) ||
+      (plan.coach_rationale && plan.coach_rationale.toLowerCase().includes(query)) ||
+      (plan.notes && plan.notes.toLowerCase().includes(query))
+    );
+  }) ?? [];
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-accent" />
-          {t.nav.weeklyPlanner}
-        </h1>
-        <p className="mt-0.5 text-sm text-text-muted">
-          Plane deine gesamte Woche mit Mesozyklus-Periodisierung.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-accent" />
+            {t.nav.weeklyPlanner}
+          </h1>
+          <p className="mt-0.5 text-sm text-text-muted">
+            Plane deine gesamte Woche mit Mesozyklus-Periodisierung.
+          </p>
+        </div>
+        <div className="flex bg-surface border border-border rounded-lg p-0.5 self-start md:self-auto">
+          <button
+            onClick={() => setActiveTab("new")}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              activeTab === "new"
+                ? "bg-bg text-text shadow-sm"
+                : "text-text-muted hover:text-text"
+            }`}
+          >
+            {generatedPlan ? "Aktueller Plan" : "Neuer Plan"}
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              activeTab === "history"
+                ? "bg-bg text-text shadow-sm"
+                : "text-text-muted hover:text-text"
+            }`}
+          >
+            Vorhandene Pläne
+          </button>
+        </div>
       </div>
 
-      {!generatedPlan && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Settings Panel */}
-          <div className="lg:col-span-4 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Sparkles className="h-4.5 w-4.5 text-accent" /> Periodisierung
-                </CardTitle>
-              </CardHeader>
-              <CardBody className="space-y-4 pt-1">
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Startdatum (Mo)"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                  <Select
-                    label="Periodisierung"
-                    value={mesocycleType}
-                    onChange={(e) => setMesocycleType(e.target.value)}
-                  >
-                    <option value="3-1">3:1 Zyklus</option>
-                    <option value="2-1">2:1 Zyklus</option>
-                  </Select>
-                </div>
-
-                {/* Auto detection section */}
-                <div className="bg-surface-2 rounded-lg p-3 border border-border/50 text-xs space-y-2">
-                  <div className="font-semibold text-text flex items-center justify-between">
-                    <span>Meso-Erkennung (Intervals.icu)</span>
-                    {detectLoading && <span className="animate-pulse text-accent">Lädt...</span>}
-                  </div>
-                  {detection && !detectLoading ? (
-                    <>
-                      <div className="flex gap-2 items-center overflow-x-auto pb-1 mt-1.5 scrollbar-thin">
-                        {detection.history.map((h, i) => (
-                          <div
-                            key={i}
-                            className="bg-surface border border-border/70 rounded px-2 py-1 text-center min-w-[70px]"
-                          >
-                            <div className="text-[10px] text-text-muted">{h.week_label}</div>
-                            <div className="font-bold text-text tabular-nums">{Math.round(h.tss)}</div>
-                            <div className="text-[9px] text-text-muted">TSS</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="text-text-muted mt-1 leading-relaxed">
-                        <strong className="text-accent">Empfehlung:</strong> {detection.reasoning}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-text-muted">TSS-Historie der letzten 4 Wochen wird geladen...</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    label="Wochen-Typ"
-                    value={weekType}
-                    onChange={(e) => setWeekType(e.target.value)}
-                  >
-                    <option value="load_1">Belastungswoche 1</option>
-                    <option value="load_2">Belastungswoche 2</option>
-                    {mesocycleType === "3-1" && <option value="load_3">Belastungswoche 3</option>}
-                    <option value="recovery">Erholungswoche</option>
-                  </Select>
-
-                  <Select
-                    label="Modell-Anbieter"
-                    value={provider}
-                    onChange={(e) => setProvider(e.target.value)}
-                  >
-                    <option value="ollama">Ollama (Lokal)</option>
-                    <option value="gemini">Gemini (Cloud)</option>
-                  </Select>
-                </div>
-
-                <Textarea
-                  label="Globale Coach-Hinweise (optional)"
-                  placeholder="Z. B. 'Fokus auf Klettern' oder 'Bin leicht erkältet'..."
-                  rows={2}
-                  value={globalNotes}
-                  onChange={(e) => setGlobalNotes(e.target.value)}
-                />
-
-                <form onSubmit={handleGenerate}>
-                  <Button
-                    type="submit"
-                    className="w-full mt-2"
-                    loading={isStreaming}
-                    disabled={activeDays.length === 0}
-                  >
-                    {isStreaming ? "Woche wird geplant..." : "Wochenplan erstellen"}
-                  </Button>
-                </form>
-              </CardBody>
-            </Card>
-
-            {/* Stream panel */}
-            {(events.length > 0 || isStreaming) && (
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-semibold">{t.coach.thinking}</CardTitle>
-                  {isStreaming && (
-                    <Button variant="ghost" size="sm" onClick={handleStop} className="text-xs text-danger h-7 px-2">
-                      Abbrechen
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardBody className="max-h-[350px] overflow-y-auto pt-1">
-                  <StreamPanel events={events} isStreaming={isStreaming} />
-                </CardBody>
-              </Card>
-            )}
-
-            {streamError && (
-              <Card className="border-danger/40 bg-danger/5">
-                <CardBody className="flex gap-3 text-xs text-danger py-3">
-                  <AlertCircle className="h-5 w-5 shrink-0" />
-                  <div>
-                    <span className="font-semibold">Fehler beim Generieren:</span>
-                    <p className="mt-1 leading-relaxed">{streamError}</p>
-                  </div>
-                </CardBody>
-              </Card>
-            )}
-          </div>
-
-          {/* Daily Schedule Panel */}
-          <div className="lg:col-span-8">
-            <Card className="h-full">
-              <CardHeader className="border-b border-border/70 pb-3">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Activity className="h-4.5 w-4.5 text-accent" />
-                  Wochenplaner-Kalender ({activeDays.length} Trainingseinheiten)
-                </CardTitle>
-              </CardHeader>
-              <CardBody className="p-0 divide-y divide-border/60">
-                {DAYS_OF_WEEK.map((dayName, dayIdx) => {
-                  const daySchedules = schedules.filter((s) => s.day_of_week === dayIdx);
-                  return (
-                    <div
-                      key={dayIdx}
-                      className={`p-4 transition-colors ${
-                        daySchedules.length > 0 ? "bg-surface-2/30" : "bg-bg/10"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-4 mb-2">
-                        <span className="text-sm font-bold text-text">
-                          {dayName}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => addSession(dayIdx)}
-                          className="text-xs text-accent h-7 px-2"
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" /> Einheit hinzufügen
-                        </Button>
-                      </div>
-
-                      {daySchedules.length > 0 ? (
-                        <div className="space-y-3 pl-3 border-l-2 border-accent/20">
-                          {daySchedules.map((day, sIdx) => (
-                            <div key={day.id} className="flex flex-wrap items-center gap-3 w-full">
-                              {daySchedules.length > 1 && (
-                                <span className="text-[10px] bg-accent/15 text-accent font-bold px-1.5 py-0.5 rounded">
-                                  Einheit {sIdx + 1}
-                                </span>
-                              )}
-
-                              {/* Duration */}
-                              <div className="w-24">
-                                <label className="text-[10px] uppercase tracking-wider text-text-muted font-bold block mb-1">
-                                  Dauer (min)
-                                </label>
-                                <input
-                                  type="number"
-                                  min="10"
-                                  max="600"
-                                  value={day.duration_min}
-                                  onChange={(e) =>
-                                    updateSession(day.id, {
-                                      duration_min: Math.max(10, parseInt(e.target.value) || 0),
-                                    })
-                                  }
-                                  className="w-full px-2 py-1 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent text-center tabular-nums"
-                                />
-                              </div>
-
-                              {/* Route Selection */}
-                              <div className="w-48">
-                                <label className="text-[10px] uppercase tracking-wider text-text-muted font-bold block mb-1">
-                                  Route (optional)
-                                </label>
-                                <select
-                                  value={day.route_id}
-                                  onChange={(e) =>
-                                    updateSession(day.id, { route_id: e.target.value })
-                                  }
-                                  className="w-full px-2 py-1 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
-                                >
-                                  <option value="">{t.coach.noRoute}</option>
-                                  {routes?.map((r) => (
-                                    <option key={r.id} value={r.id}>
-                                      {r.name} ({(r.distance_m / 1000).toFixed(0)} km)
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              {/* Day notes */}
-                              <div className="flex-1 min-w-[180px]">
-                                <label className="text-[10px] uppercase tracking-wider text-text-muted font-bold block mb-1">
-                                  Notizen
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="Z. B. 'Nur lockeres Flachland'..."
-                                  value={day.notes}
-                                  onChange={(e) =>
-                                    updateSession(day.id, { notes: e.target.value })
-                                  }
-                                  className="w-full px-3 py-1 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
-                                />
-                              </div>
-
-                              {/* Delete button */}
-                              <div className="pt-5">
-                                <button
-                                  type="button"
-                                  onClick={() => deleteSession(day.id)}
-                                  className="p-1.5 text-text-muted hover:text-danger hover:bg-danger/10 rounded transition-colors"
-                                >
-                                  <Trash className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-text-muted italic pl-3">Ruhetag / Rest Day</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </CardBody>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* Generated Weekly Plan Display */}
-      {generatedPlan && (
+      {activeTab === "history" ? (
         <div className="space-y-6">
-          <Card className="border-accent/40 bg-accent/5">
-            <CardHeader className="flex flex-row items-start justify-between">
-              <div>
-                <CardTitle sub="Erstellter Trainingsplan">
-                  Woche ab Montag, {new Date(startDate).toLocaleDateString()}
-                </CardTitle>
-                <div className="flex gap-4 text-xs text-text-muted mt-2 tabular-nums">
-                  <span>
-                    Mesozykus: <strong className="text-text">{generatedPlan.mesocycle_type}</strong>
-                  </span>
-                  <span>
-                    Wochentyp:{" "}
-                    <strong className="text-text">
-                      {generatedPlan.week_type === "recovery"
-                        ? "Erholung"
-                        : `Belastung (Woche ${generatedPlan.week_type.split("_")[1]})`}
-                    </strong>
-                  </span>
-                  <span>
-                    Einheiten: <strong className="text-text">{generatedPlan.workouts.length}</strong>
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="danger" size="sm" onClick={handleDeletePlan}>
-                  Plan löschen
-                </Button>
-                <Button size="sm" onClick={handlePushAll} loading={pushingAll}>
-                  Ganze Woche übertragen
-                </Button>
-              </div>
-            </CardHeader>
-            <CardBody className="pt-2">
-              <h4 className="text-xs font-semibold text-text-secondary mb-1">Periodisierungs-Begründung des Coaches</h4>
-              <p className="text-xs leading-relaxed text-text-muted">{generatedPlan.coach_rationale}</p>
-            </CardBody>
-          </Card>
+          <div className="flex gap-4 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
+              <input
+                type="text"
+                placeholder="Pläne durchsuchen (z. B. 20.07.2026, 3:1, Belastung)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </div>
+          </div>
 
-          {/* List of days */}
-          <div className="space-y-4">
-            {DAYS_OF_WEEK.map((dayName, idx) => {
-              // Find workout for this day_of_week
-              const workout = generatedPlan.workouts.find((w) => {
-                const wDate = new Date(w.scheduled_date!);
-                // Check if workout scheduled_date falls on this index (Monday = 0)
-                const startDt = new Date(startDate);
-                const diffDays = Math.round((wDate.getTime() - startDt.getTime()) / (1000 * 3600 * 24));
-                return diffDays === idx;
-              });
+          {filteredPlans.length === 0 ? (
+            <div className="text-center py-12 text-text-muted border border-dashed border-border/80 rounded-xl bg-surface/50">
+              <CalendarDays className="h-8 w-8 mx-auto text-text-muted/60 mb-2" />
+              <p className="text-sm">Keine Wochenpläne gefunden.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredPlans.map((plan) => {
+                const totalWorkouts = plan.workouts?.length ?? 0;
+                const formattedDate = new Date(plan.start_date).toLocaleDateString("de-CH", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                });
+                const isPast = isPastWeek(plan.start_date);
 
-              if (!workout) {
                 return (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between bg-surface/50 border border-border/40 rounded-xl p-4 text-text-muted text-xs italic"
-                  >
-                    <span className="font-bold text-text-muted/60">{dayName}</span>
-                    <span>Rest Day / Ruhetag</span>
-                  </div>
-                );
-              }
-
-              const expanded = !!expandedWorkouts[workout.id];
-              const phases = (workout.llm_plan as { phases?: WorkoutPhase[] })?.phases || [];
-              const maxDuration = phases.length ? Math.max(...phases.map((p) => p.duration_min)) : 0;
-              const isEditing = editingWorkout === workout.id;
-
-              return (
-                <Card key={workout.id} className="border-border/80">
-                  <CardHeader className="cursor-pointer select-none" onClick={() => toggleWorkoutExpand(workout.id)}>
-                    <div className="flex items-center justify-between w-full">
+                  <Card key={plan.id} className="border-border/80 hover:border-accent/40 transition-colors">
+                    <CardHeader className="flex flex-row items-start justify-between">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-accent uppercase tracking-wider">
-                            {dayName}
+                            Woche ab {formattedDate}
                           </span>
-                          <span className="h-1.5 w-1.5 rounded-full bg-border" />
-                          <h3 className="font-bold text-sm text-text">{workout.name}</h3>
-                        </div>
-                        <div className="flex gap-3 text-xs text-text-muted tabular-nums">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            {Math.round((workout.duration_seconds ?? 0) / 60)} min
-                          </span>
-                          <span>
-                            TSS: <strong className="text-text">{Math.round(workout.target_tss ?? 0)}</strong>
-                          </span>
-                          <span className="capitalize">{workout.workout_type}</span>
-                          {workout.route_id && (
-                            <span className="flex items-center gap-0.5 text-accent">
-                              <MapPin className="h-3 w-3" /> Route
+                          {isPast ? (
+                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-surface-2 text-text-muted border border-border">
+                              <Lock className="h-2.5 w-2.5" /> Archiv
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-accent/15 text-accent border border-accent/20">
+                              Aktiv
                             </span>
                           )}
                         </div>
+                        <h3 className="font-bold text-sm text-text">
+                          {plan.mesocycle_type} Zyklus • {plan.week_type.startsWith("load") ? `Belastungswoche ${plan.week_type.split("_")[1]}` : "Erholungswoche"}
+                        </h3>
+                        <p className="text-xs text-text-muted mt-1">
+                          {totalWorkouts} Einheiten geplant
+                        </p>
                       </div>
-
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            workout.status === "pushed"
-                              ? "bg-accent/15 text-accent border border-accent/20"
-                              : "bg-surface-2 text-text-muted border border-border"
-                          }`}
-                        >
-                          {workout.status === "pushed" ? "Übertragen" : "Entwurf"}
-                        </span>
-                        {expanded ? <ChevronUp className="h-4.5 w-4.5" /> : <ChevronDown className="h-4.5 w-4.5" />}
-                      </div>
-                    </div>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setGeneratedPlan(plan);
+                          setActiveTab("new");
+                        }}
+                      >
+                        {isPast ? "Ansehen" : "Auswählen & Bearbeiten"}
+                      </Button>
+                    </CardHeader>
+                    {plan.notes && (
+                      <CardBody className="pt-0 pb-3 border-t border-border/20 mt-2">
+                        <p className="text-xs italic text-text-muted line-clamp-2 mt-2">
+                          Notiz: {plan.notes}
+                        </p>
+                      </CardBody>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {!generatedPlan && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              {/* Settings Panel */}
+              <div className="lg:col-span-4 space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Sparkles className="h-4.5 w-4.5 text-accent" /> Periodisierung
+                    </CardTitle>
                   </CardHeader>
+                  <CardBody className="space-y-4 pt-1">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label="Startdatum (Mo)"
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                      />
+                      <Select
+                        label="Periodisierung"
+                        value={mesocycleType}
+                        onChange={(e) => setMesocycleType(e.target.value)}
+                      >
+                        <option value="3-1">3:1 Zyklus</option>
+                        <option value="2-1">2:1 Zyklus</option>
+                      </Select>
+                    </div>
 
-                  {expanded && (
-                    <CardBody className="border-t border-border/50 space-y-4 pt-4">
-                      {isEditing ? (
-                        <div className="space-y-4">
-                          <div className="space-y-1">
-                            <label className="text-xs font-semibold text-text-muted">Workout-Name</label>
-                            <input
-                              type="text"
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              className="w-full px-3 py-2 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
+                    {/* Auto detection section */}
+                    <div className="bg-surface-2 rounded-lg p-3 border border-border/50 text-xs space-y-2">
+                      <div className="font-semibold text-text flex items-center justify-between">
+                        <span>Meso-Erkennung (Intervals.icu)</span>
+                        {detectLoading && <span className="animate-pulse text-accent">Lädt...</span>}
+                      </div>
+                      {detection && !detectLoading ? (
+                        <>
+                          <div className="flex gap-2 items-center overflow-x-auto pb-1 mt-1.5 scrollbar-thin">
+                            {detection.history.map((h, i) => (
+                              <div
+                                key={i}
+                                className="bg-surface border border-border/70 rounded px-2 py-1 text-center min-w-[70px]"
+                              >
+                                <div className="text-[10px] text-text-muted">{h.week_label}</div>
+                                <div className="font-bold text-text mt-0.5">{Math.round(h.tss)}</div>
+                                <div className="text-[9px] text-text-muted">TSS</div>
+                              </div>
+                            ))}
                           </div>
-
-                          <div className="space-y-1">
-                            <label className="text-xs font-semibold text-text-muted">Intervals.icu Schritte</label>
-                            <textarea
-                              value={editStructuredText}
-                              onChange={(e) => setEditStructuredText(e.target.value)}
-                              rows={8}
-                              className="w-full px-3 py-2 text-sm font-mono bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
+                          <div className="text-[11px] text-accent mt-2 font-medium">
+                            Empfehlung: {detection.reasoning}
                           </div>
+                        </>
+                      ) : (
+                        <div className="text-text-muted py-1">Gib ein Startdatum ein, um deinen Mesozyklus zu ermitteln.</div>
+                      )}
+                    </div>
 
-                          <div className="flex gap-2 justify-end pt-2">
-                            <Button size="sm" variant="secondary" onClick={() => setEditingWorkout(null)}>
-                              Abbrechen
-                            </Button>
-                            <Button size="sm" loading={savingWorkout} onClick={handleSaveWorkout}>
-                              Speichern
-                            </Button>
+                    <Select
+                      label="Wochen-Typ"
+                      value={weekType}
+                      onChange={(e) => setWeekType(e.target.value)}
+                    >
+                      <option value="load_1">Belastungswoche 1</option>
+                      <option value="load_2">Belastungswoche 2</option>
+                      <option value="load_3">Belastungswoche 3</option>
+                      <option value="recovery">Erholungswoche</option>
+                    </Select>
+
+                    <Select
+                      label="Modell-Anbieter"
+                      value={provider}
+                      onChange={(e) => setProvider(e.target.value)}
+                    >
+                      <option value="gemini">Gemini (Cloud)</option>
+                      <option value="ollama">Ollama (Lokal)</option>
+                    </Select>
+
+                    <Textarea
+                      label="Globale Coach-Hinweise (optional)"
+                      value={globalNotes}
+                      onChange={(e) => setGlobalNotes(e.target.value)}
+                      placeholder="Z. B. 'Fokus auf Klettern' oder 'Bin leicht erkältet'..."
+                      rows={3}
+                    />
+
+                    <Button
+                      className="w-full"
+                      onClick={handleGenerate}
+                      disabled={isStreaming}
+                      loading={isStreaming}
+                    >
+                      Wochenplan erstellen
+                    </Button>
+                  </CardBody>
+                </Card>
+
+                {isStreaming && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                        <span>Der Coach denkt nach…</span>
+                        <Button variant="secondary" size="sm" onClick={handleStop}>
+                          Stoppen
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardBody className="pt-0">
+                      {streamError ? (
+                        <div className="bg-danger/10 border border-danger/20 text-danger text-xs rounded-lg p-3 flex gap-2 items-start mt-2">
+                          <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-semibold">Fehler beim Generieren:</span>
+                            <p className="mt-0.5">{streamError}</p>
                           </div>
                         </div>
                       ) : (
-                        <>
-                          {phases.length > 0 && (
-                            <div className="space-y-1.5">
-                              {phases.map((p, i) => (
-                                <PhaseBar key={i} phase={p} maxDurationMin={maxDuration} />
-                              ))}
-                            </div>
-                          )}
-
-                          <CodeBlock code={workout.structured_text ?? ""} />
-
-                          {workout.llm_reasoning && (
-                            <div>
-                              <h4 className="text-xs font-semibold text-text-secondary mb-1">
-                                Begründung des Coaches
-                              </h4>
-                              <p className="text-xs leading-relaxed text-text-muted">{workout.llm_reasoning}</p>
-                            </div>
-                          )}
-
-                          {workout.coach_notes && (
-                            <div>
-                              <h4 className="text-xs font-semibold text-text-secondary mb-1">Coach-Notizen</h4>
-                              <p className="text-xs leading-relaxed text-text-muted">{workout.coach_notes}</p>
-                            </div>
-                          )}
-
-                          <div className="flex gap-2 justify-end border-t border-border/50 pt-4">
-                            <Button size="sm" variant="secondary" onClick={() => startEditWorkout(workout)}>
-                              <Pencil className="h-3.5 w-3.5 mr-1.5" /> Bearbeiten
-                            </Button>
-                            {workout.status !== "pushed" && (
-                              <Button size="sm" onClick={() => handlePushSingle(workout.id)}>
-                                <Send className="h-3.5 w-3.5 mr-1.5" /> Zu Intervals.icu senden
-                              </Button>
-                            )}
-                          </div>
-                        </>
+                        <StreamPanel events={events} isStreaming={isStreaming} />
                       )}
                     </CardBody>
-                  )}
+                  </Card>
+                )}
+              </div>
+
+              {/* Day Schedules Creator */}
+              <div className="lg:col-span-8 space-y-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Activity className="h-4.5 w-4.5 text-accent" /> Wochenplaner-Kalender ({activeDays.length} Trainingseinheiten)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardBody className="space-y-4 pt-1">
+                    {DAYS_OF_WEEK.map((dayName, idx) => {
+                      const daySchedules = activeDays.filter((s) => s.day_of_week === idx);
+                      return (
+                        <div key={idx} className="border-b border-border/40 pb-3 last:border-b-0 last:pb-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-bold text-text">{dayName}</span>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setSchedules((prev) => [
+                                  ...prev,
+                                  {
+                                    id: Math.random().toString(),
+                                    day_of_week: idx,
+                                    duration_min: 90,
+                                    route_id: "",
+                                    notes: "",
+                                  },
+                                ]);
+                              }}
+                            >
+                              <Plus className="h-3 w-3 mr-1" /> Einheit hinzufügen
+                            </Button>
+                          </div>
+
+                          {daySchedules.length > 0 ? (
+                            <div className="space-y-2 pl-3">
+                              {daySchedules.map((sched, sIdx) => (
+                                <div key={sched.id} className="flex gap-3 items-end bg-surface-2 p-2 rounded-lg border border-border/30">
+                                  <div className="flex flex-col gap-0.5 min-w-[70px]">
+                                    <span className="text-[10px] font-bold text-accent uppercase">Einheit {sIdx + 1}</span>
+                                    <Input
+                                      type="number"
+                                      value={sched.duration_min}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        setSchedules((prev) =>
+                                          prev.map((s) => (s.id === sched.id ? { ...s, duration_min: val } : s))
+                                        );
+                                      }}
+                                      className="py-1 text-xs"
+                                      placeholder="Minuten"
+                                    />
+                                  </div>
+                                  <div className="flex-1">
+                                    <Select
+                                      value={sched.route_id || ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSchedules((prev) =>
+                                          prev.map((s) => (s.id === sched.id ? { ...s, route_id: val } : s))
+                                        );
+                                      }}
+                                      className="py-1 text-xs"
+                                    >
+                                      <option value="">Keine Route</option>
+                                      {routes?.map((r) => (
+                                        <option key={r.id} value={r.id}>
+                                          {r.name} ({Math.round(r.distance_m / 1000)} km)
+                                        </option>
+                                      ))}
+                                    </Select>
+                                  </div>
+                                  <div className="flex-1">
+                                    <Input
+                                      type="text"
+                                      value={sched.notes || ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSchedules((prev) =>
+                                          prev.map((s) => (s.id === sched.id ? { ...s, notes: val } : s))
+                                        );
+                                      }}
+                                      className="py-1 text-xs"
+                                      placeholder="Z. B. 'Nur lockeres Flachland'..."
+                                    />
+                                  </div>
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSchedules((prev) => prev.filter((s) => s.id !== sched.id));
+                                    }}
+                                  >
+                                    <Trash className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-text-muted italic pl-3">Ruhetag / Rest Day</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </CardBody>
                 </Card>
-              );
-            })}
-          </div>
-        </div>
+              </div>
+            </div>
+          )}
+
+          {/* Generated Weekly Plan Display */}
+          {generatedPlan && (
+            <div className="space-y-6">
+              {(() => {
+                const isPast = isPastWeek(generatedPlan.start_date);
+                return (
+                  <>
+                    <Card className="border-accent/40 bg-accent/5">
+                      <CardHeader className="flex flex-row items-start justify-between">
+                        <div>
+                          <CardTitle sub="Erstellter Trainingsplan">
+                            <span className="flex items-center gap-2">
+                              Woche ab Montag, {new Date(generatedPlan.start_date).toLocaleDateString("de-CH")}
+                              {isPast && (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-surface border border-border text-text-muted">
+                                  <Lock className="h-2.5 w-2.5" /> Archiviert (Schreibgeschützt)
+                                </span>
+                              )}
+                            </span>
+                          </CardTitle>
+                          <div className="flex gap-4 text-xs text-text-muted mt-2 tabular-nums">
+                            <span>
+                              Mesozykus: <strong className="text-text">{generatedPlan.mesocycle_type}</strong>
+                            </span>
+                            <span>
+                              Wochentyp:{" "}
+                              <strong className="text-text">
+                                {generatedPlan.week_type === "recovery"
+                                  ? "Erholung"
+                                  : `Belastung (Woche ${generatedPlan.week_type.split("_")[1]})`}
+                              </strong>
+                            </span>
+                            <span>
+                              Einheiten: <strong className="text-text">{generatedPlan.workouts.length}</strong>
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="secondary" size="sm" onClick={() => setGeneratedPlan(null)}>
+                            Neuen Plan erstellen
+                          </Button>
+                          {!isPast && (
+                            <>
+                              <Button variant="danger" size="sm" onClick={handleDeletePlan}>
+                                Plan löschen
+                              </Button>
+                              <Button size="sm" onClick={handlePushAll} loading={pushingAll}>
+                                Ganze Woche übertragen
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardBody className="pt-2">
+                        <h4 className="text-xs font-semibold text-text-secondary mb-1">Periodisierungs-Begründung des Coaches</h4>
+                        <p className="text-xs leading-relaxed text-text-muted">{generatedPlan.coach_rationale}</p>
+                      </CardBody>
+                    </Card>
+
+                    {/* List of days */}
+                    <div className="space-y-4">
+                      {DAYS_OF_WEEK.map((dayName, idx) => {
+                        // Find all workouts for this day_of_week
+                        const dayWorkouts = generatedPlan.workouts.filter((w) => {
+                          const wDate = new Date(w.scheduled_date!);
+                          const startDt = new Date(generatedPlan.start_date);
+                          const diffDays = Math.round((wDate.getTime() - startDt.getTime()) / (1000 * 3600 * 24));
+                          return diffDays === idx;
+                        });
+
+                        if (dayWorkouts.length === 0) {
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between bg-surface/50 border border-border/40 rounded-xl p-4 text-text-muted text-xs italic"
+                            >
+                              <span className="font-bold text-text-muted/60">{dayName}</span>
+                              <span>Rest Day / Ruhetag</span>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={idx} className="space-y-3">
+                            {dayWorkouts.map((workout, wIdx) => {
+                              const expanded = !!expandedWorkouts[workout.id];
+                              const phases = (workout.llm_plan as { phases?: WorkoutPhase[] })?.phases || [];
+                              const maxDuration = phases.length ? Math.max(...phases.map((p) => p.duration_min)) : 0;
+                              const isEditing = editingWorkout === workout.id;
+
+                              return (
+                                <Card key={workout.id} className="border-border/80">
+                                  <CardHeader className="cursor-pointer select-none" onClick={() => toggleWorkoutExpand(workout.id)}>
+                                    <div className="flex items-center justify-between w-full">
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-bold text-accent uppercase tracking-wider">
+                                            {dayName} {dayWorkouts.length > 1 ? `#${wIdx + 1}` : ""}
+                                          </span>
+                                          <span className="h-1.5 w-1.5 rounded-full bg-border" />
+                                          <h3 className="font-bold text-sm text-text">{workout.name}</h3>
+                                        </div>
+                                        <div className="flex gap-3 text-xs text-text-muted tabular-nums">
+                                          <span className="flex items-center gap-1">
+                                            <Clock className="h-3.5 w-3.5" />
+                                            {Math.round((workout.duration_seconds ?? 0) / 60)} min
+                                          </span>
+                                          <span>
+                                            TSS: <strong className="text-text">{Math.round(workout.target_tss ?? 0)}</strong>
+                                          </span>
+                                          <span className="capitalize">{workout.workout_type}</span>
+                                          {workout.route_id && (
+                                            <span className="flex items-center gap-0.5 text-accent">
+                                              <MapPin className="h-3 w-3" /> Route
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-3">
+                                        <span
+                                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                            workout.status === "pushed"
+                                              ? "bg-accent/15 text-accent border border-accent/20"
+                                              : "bg-surface-2 text-text-muted border border-border"
+                                          }`}
+                                        >
+                                          {workout.status === "pushed" ? "Übertragen" : "Entwurf"}
+                                        </span>
+                                        {expanded ? <ChevronUp className="h-4.5 w-4.5" /> : <ChevronDown className="h-4.5 w-4.5" />}
+                                      </div>
+                                    </div>
+                                  </CardHeader>
+
+                                  {expanded && (
+                                    <CardBody className="border-t border-border/50 space-y-4 pt-4">
+                                      {isEditing ? (
+                                        <div className="space-y-4">
+                                          <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-text-muted">Workout-Name</label>
+                                            <input
+                                              type="text"
+                                              value={editName}
+                                              onChange={(e) => setEditName(e.target.value)}
+                                              className="w-full px-3 py-2 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                                            />
+                                          </div>
+
+                                          <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-text-muted">Intervals.icu Schritte</label>
+                                            <textarea
+                                              value={editStructuredText}
+                                              onChange={(e) => setEditStructuredText(e.target.value)}
+                                              rows={8}
+                                              className="w-full px-3 py-2 text-sm font-mono bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                                            />
+                                          </div>
+
+                                          <div className="flex gap-2 justify-end pt-2">
+                                            <Button size="sm" variant="secondary" onClick={() => setEditingWorkout(null)}>
+                                              Abbrechen
+                                            </Button>
+                                            <Button size="sm" loading={savingWorkout} onClick={handleSaveWorkout}>
+                                              Speichern
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          {phases.length > 0 && (
+                                            <div className="space-y-1.5">
+                                              {phases.map((p, i) => (
+                                                <PhaseBar key={i} phase={p} maxDurationMin={maxDuration} />
+                                              ))}
+                                            </div>
+                                          )}
+
+                                          <CodeBlock code={workout.structured_text ?? ""} />
+
+                                          {workout.llm_reasoning && (
+                                            <div>
+                                              <h4 className="text-xs font-semibold text-text-secondary mb-1">
+                                                Begründung des Coaches
+                                              </h4>
+                                              <p className="text-xs leading-relaxed text-text-muted">{workout.llm_reasoning}</p>
+                                            </div>
+                                          )}
+
+                                          {workout.coach_notes && (
+                                            <div>
+                                              <h4 className="text-xs font-semibold text-text-secondary mb-1">Coach-Notizen</h4>
+                                              <p className="text-xs leading-relaxed text-text-muted">{workout.coach_notes}</p>
+                                            </div>
+                                          )}
+
+                                          <div className="flex gap-2 justify-end border-t border-border/50 pt-4">
+                                            {!isPast && (
+                                              <>
+                                                <Button size="sm" variant="secondary" onClick={() => startEditWorkout(workout)}>
+                                                  <Pencil className="h-3.5 w-3.5 mr-1.5" /> Bearbeiten
+                                                </Button>
+                                                {workout.status !== "pushed" && (
+                                                  <Button size="sm" onClick={() => handlePushSingle(workout.id)}>
+                                                    <Send className="h-3.5 w-3.5 mr-1.5" /> Zu Intervals.icu senden
+                                                  </Button>
+                                                )}
+                                              </>
+                                            )}
+                                          </div>
+                                        </>
+                                      )}
+                                    </CardBody>
+                                  )}
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -31,7 +31,10 @@ async def test_mesocycle_detector_3_1_progressive_load():
     r1 = MagicMock()
     r1.scalars.return_value.all.return_value = [s1]
 
-    session.execute.side_effect = [r4, r3, r2, r1]
+    empty_wk = MagicMock()
+    empty_wk.scalars.return_value.all.return_value = []
+
+    session.execute.side_effect = [r4, empty_wk, r3, empty_wk, r2, empty_wk, r1, empty_wk]
 
     res = await MesocycleDetector.get_tss_history_and_recommendation(
         athlete=athlete,
@@ -67,7 +70,10 @@ async def test_mesocycle_detector_3_1_after_recovery():
     r1 = MagicMock()
     r1.scalars.return_value.all.return_value = [s1]
 
-    session.execute.side_effect = [r4, r3, r2, r1]
+    empty_wk = MagicMock()
+    empty_wk.scalars.return_value.all.return_value = []
+
+    session.execute.side_effect = [r4, empty_wk, r3, empty_wk, r2, empty_wk, r1, empty_wk]
 
     res = await MesocycleDetector.get_tss_history_and_recommendation(
         athlete=athlete,

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.session import TrainingSession
+from terratrain.db.models.workout import Workout
 
 
 class MesocycleDetector:
@@ -13,13 +14,35 @@ class MesocycleDetector:
     async def get_tss_history_and_recommendation(
         athlete: Athlete, session: AsyncSession, start_date: date, mesocycle_type: str
     ) -> dict:
+        # 1. Fetch live daily load directly from Intervals.icu REST API wellness endpoint
+        wellness_by_date: dict[str, float] = {}
+        if athlete.intervals_api_key_encrypted and athlete.intervals_user_id:
+            try:
+                from terratrain.services.intervals_client import IntervalsClient
+                client = IntervalsClient.from_athlete(athlete)
+                oldest = start_date - timedelta(weeks=4)
+                newest = start_date - timedelta(days=1)
+                wellness_list = await client.get_wellness(oldest=oldest, newest=newest)
+                for w in wellness_list:
+                    day_id = str(w.get("id"))
+                    load = w.get("load") or w.get("ctlLoad") or 0.0
+                    wellness_by_date[day_id] = float(load)
+            except Exception:
+                pass
+
         # Calculate weekly TSS starting W-4 to W-1
         history = []
         for i in range(4, 0, -1):
             w_start = start_date - timedelta(weeks=i)
             w_end = w_start + timedelta(days=6)
 
-            # Create timezone-aware datetime range
+            # Primary: Sum daily load from Intervals.icu REST API
+            api_tss = 0.0
+            for d in range(7):
+                day_str = (w_start + timedelta(days=d)).strftime("%Y-%m-%d")
+                api_tss += wellness_by_date.get(day_str, 0.0)
+
+            # Secondary fallback: Local TrainingSession and Workout tables
             w_start_dt = datetime.combine(w_start, time.min).replace(tzinfo=timezone.utc)
             w_end_dt = datetime.combine(w_end, time.max).replace(tzinfo=timezone.utc)
 
@@ -30,13 +53,24 @@ class MesocycleDetector:
                 .where(TrainingSession.start_date <= w_end_dt)
             )
             sessions = result.scalars().all()
-            tss = sum(s.tss or 0.0 for s in sessions)
+            session_tss = sum(s.tss if s.tss is not None else (50.0 if sessions else 0.0) for s in sessions)
+
+            res_wk = await session.execute(
+                select(Workout)
+                .where(Workout.athlete_id == athlete.id)
+                .where(Workout.scheduled_date >= w_start)
+                .where(Workout.scheduled_date <= w_end)
+            )
+            workouts = res_wk.scalars().all()
+            workout_tss = sum(w.target_tss or 0.0 for w in workouts)
+
+            final_tss = max(api_tss, session_tss, workout_tss)
             history.append(
                 {
                     "week_label": f"W-{i}",
                     "start_date": w_start.isoformat(),
                     "end_date": w_end.isoformat(),
-                    "tss": round(tss, 1),
+                    "tss": round(final_tss, 1),
                 }
             )
 

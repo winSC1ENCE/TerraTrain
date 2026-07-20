@@ -35,7 +35,7 @@ import { PhaseBar } from "@/components/coach/PhaseBar";
 interface ScheduleItem {
   id: string;
   day_of_week: number;
-  duration_min: number;
+  duration_min: number | "";
   route_id: string;
   notes: string;
 }
@@ -194,7 +194,7 @@ export default function WeeklyPlannerPage() {
       week_type: weekType,
       schedules: activeDays.map((s) => ({
         day_of_week: s.day_of_week,
-        duration_min: s.duration_min,
+        duration_min: typeof s.duration_min === "number" && !isNaN(s.duration_min) ? s.duration_min : (parseFloat(s.duration_min as string) || 90),
         route_id: s.route_id || null,
         notes: s.notes || null,
       })),
@@ -665,13 +665,14 @@ export default function WeeklyPlannerPage() {
                             <div className="space-y-2 pl-3">
                               {daySchedules.map((sched, sIdx) => (
                                 <div key={sched.id} className="flex gap-3 items-end bg-surface-2 p-2 rounded-lg border border-border/30">
-                                  <div className="flex flex-col gap-0.5 min-w-[70px]">
+                                  <div className="flex flex-col gap-0.5 min-w-[75px]">
                                     <span className="text-[10px] font-bold text-accent uppercase">Einheit {sIdx + 1}</span>
                                     <Input
                                       type="number"
                                       value={sched.duration_min}
                                       onChange={(e) => {
-                                        const val = parseFloat(e.target.value) || 0;
+                                        const raw = e.target.value;
+                                        const val = raw === "" ? "" : (isNaN(parseFloat(raw)) ? "" : parseFloat(raw));
                                         setSchedules((prev) =>
                                           prev.map((s) => (s.id === sched.id ? { ...s, duration_min: val } : s))
                                         );
@@ -679,6 +680,9 @@ export default function WeeklyPlannerPage() {
                                       className="py-1 text-xs"
                                       placeholder="Minuten"
                                     />
+                                    {typeof sched.duration_min === "number" && sched.duration_min > 0 && sched.duration_min < 10 && (
+                                      <span className="text-[9px] text-warning font-medium leading-none mt-0.5">Unter 10 Min.</span>
+                                    )}
                                   </div>
                                   <div className="flex-1">
                                     <Select

@@ -1,6 +1,6 @@
 import pytest
 from terratrain.schemas.workout import WorkoutPhase, WorkoutPlan
-from terratrain.services.weekly_coaching_agent import WeeklyCoachingAgent
+from terratrain.services.workout_normalizer import normalize_workout_duration
 
 def test_normalize_workout_duration_oversized():
     # Candidate workout is 145 min (20m warmup + 40m prep + 3*(8m work + 8m rec = 48m) + 37m cooldown)
@@ -21,7 +21,7 @@ def test_normalize_workout_duration_oversized():
         ]
     )
 
-    adjusted = WeeklyCoachingAgent._normalize_workout_duration(candidate, 105.0)
+    adjusted = normalize_workout_duration(candidate, 105.0)
     total_min = sum(p.duration_min * max(1, p.repeat) for p in adjusted.phases)
     assert total_min == 105.0
 
@@ -41,6 +41,6 @@ def test_normalize_workout_duration_undersized():
         ]
     )
 
-    adjusted = WeeklyCoachingAgent._normalize_workout_duration(candidate, 90.0)
-    total_min = sum(p.duration_min * max(1, p.repeat) for p in candidate.phases)
+    adjusted = normalize_workout_duration(candidate, 90.0)
+    total_min = sum(p.duration_min * max(1, p.repeat) for p in adjusted.phases)
     assert total_min == 90.0

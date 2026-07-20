@@ -28,6 +28,7 @@ from terratrain.schemas.workout import WorkoutPhase, WorkoutPlan
 from terratrain.services.rag_service import RagService
 from terratrain.services.training_analytics import TrainingAnalytics
 from terratrain.services.workout_formatter import WorkoutFormatter
+from terratrain.services.workout_normalizer import normalize_workout_duration
 
 logger = structlog.get_logger()
 
@@ -212,6 +213,14 @@ class CoachingAgent:
                     rationale=plan_data["rationale"],
                     coach_notes=plan_data.get("coach_notes", ""),
                 )
+                import re
+                target_dur = 0.0
+                if notes:
+                    dur_match = re.search(r"(\d+)\s*(?:min|m|minute)", notes, re.IGNORECASE)
+                    if dur_match:
+                        target_dur = float(dur_match.group(1))
+                if target_dur > 0:
+                    candidate = normalize_workout_duration(candidate, target_dur)
                 validation_errors = WorkoutFormatter.validate(candidate)
             except Exception as exc:
                 validation_errors = [f"Plan does not match the required schema: {exc}"]

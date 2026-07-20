@@ -379,11 +379,14 @@ Terrain score: {route["terrain_score"]} (0=flat, 1=very hilly)
             if route["climbs"]:
                 prompt += "Key climbs:\n"
                 for c in route["climbs"]:
+                    start_km = c.get("start_km", 0.0)
+                    end_km = c.get("end_km", 0.0)
+                    start_min = round(start_km * (60.0 / 23.0))
+                    end_min = round(end_km * (60.0 / 23.0))
+                    cat_str = f" ({c['category']})" if c.get("category") else ""
                     prompt += (
-                        f"  - {c['start_km']}–{c['end_km']} km, "
-                        f"{c['avg_grade_pct']}% avg grade, "
-                        f"{c['elevation_gain_m']} m gain"
-                        f"{' (' + c['category'] + ')' if c.get('category') else ''}\n"
+                        f"  - km {start_km}–{end_km} (ESTIMATED RIDE WINDOW: min {start_min} to min {end_min}), "
+                        f"{c['avg_grade_pct']}% avg grade, {c['elevation_gain_m']} m gain{cat_str}\n"
                     )
 
         if rag:
@@ -396,20 +399,20 @@ Terrain score: {route["terrain_score"]} (0=flat, 1=very hilly)
 ## Instructions
 Design a structured workout that:
 1. Fits the athlete's current form (TSB) and training load
-2. Places intervals on climbs if a route is provided
+2. Places high-intensity intervals ON the climbs (between climb start_km and end_km) if a route is provided. Warmup/prep must end right when reaching the climb.
 3. Follows evidence-based periodization from the training science context
 4. Produces a realistic, safe training stress (TSS)
 
 ## HARD RULES — plans violating these are rejected automatically
 - First phase = warmup: at most 75% FTP, at least 10 min
 - Last phase = cooldown: at most 75% FTP
+- REPEAT CALCULATION MATH: Remember that a set with `repeat: N` multiplies the total time! 3 repeats of 8 min work + 8 min recovery takes 3 * (8 + 8) = 48 minutes total!
 - Intervals ABOVE 105% FTP: maximum 8 min each
 - Threshold intervals (95-105% FTP): maximum 30 min each
 - Total time at/above 95% FTP: maximum 60 min per session
 - `target_power_pct` must be a NUMBER (e.g. 95), never a zone label
 - `target_hr_zone` only as numeric bpm range like "130-145" — NEVER "Z2"
-- Use `repeat` for interval sets (e.g. 4 reps of 5min on / 3min off:
-  one phase with duration_min=5, repeat=4 followed by one with duration_min=3, repeat=4)
+- Use `repeat` for interval sets
 - `target_tss` must match the phases (validator recomputes it; ±30% tolerance)
 
 ## Example of a GOOD threshold plan (phases only)

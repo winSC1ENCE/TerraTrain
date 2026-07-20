@@ -156,6 +156,105 @@ WEEK_TOOLS = [
 
 
 class WeeklyCoachingAgent(CoachingAgent):
+    @staticmethod
+    def _normalize_workout_duration(candidate: WorkoutPlan, target_duration_min: float) -> WorkoutPlan:
+        """Ensure the sum of phase durations (accounting for repeat counts) strictly matches target_duration_min."""
+        import math
+        if not candidate.phases or target_duration_min <= 0:
+            return candidate
+
+        actual_min = sum(p.duration_min * max(1, p.repeat) for p in candidate.phases)
+        diff = actual_min - target_duration_min
+
+        # If already within 1 minute of target, keep as is
+        if abs(diff) <= 1.0:
+            return candidate
+
+        phases = list(candidate.phases)
+
+        if diff > 0:
+            # Workout is TOO LONG. Reduce duration by `diff` minutes.
+            # 1. Try to reduce non-interval phases (cooldown, warmup, aerobic prep, endurance)
+            flexible_indices = [
+                i for i, p in enumerate(phases)
+                if p.repeat <= 1 and p.duration_min > 5 and any(kw in p.name.lower() or kw in p.zone.lower() for kw in ["cooldown", "warmup", "prep", "endurance", "z1", "z2", "recovery"])
+            ]
+            
+            remaining_to_reduce = diff
+            for idx in reversed(flexible_indices):
+                p = phases[idx]
+                min_allowed = 5.0
+                can_reduce = max(0.0, p.duration_min - min_allowed)
+                reduction = min(remaining_to_reduce, can_reduce)
+                if reduction > 0:
+                    phases[idx] = WorkoutPhase(
+                        name=p.name,
+                        duration_min=round(p.duration_min - reduction, 1),
+                        zone=p.zone,
+                        target_power_pct=p.target_power_pct,
+                        target_hr_zone=p.target_hr_zone,
+                        description=p.description,
+                        repeat=p.repeat,
+                    )
+                    remaining_to_reduce -= reduction
+                    if remaining_to_reduce <= 0.5:
+                        break
+
+            # 2. If still too long (because interval repeats were oversized), adjust repeat counts or cooldown
+            if remaining_to_reduce > 0.5:
+                for idx, p in enumerate(phases):
+                    if p.repeat > 1:
+                        single_cycle_min = p.duration_min
+                        if idx + 1 < len(phases) and phases[idx + 1].repeat == p.repeat:
+                            single_cycle_min += phases[idx + 1].duration_min
+                        
+                        if single_cycle_min > 0:
+                            repeats_to_cut = math.ceil(remaining_to_reduce / single_cycle_min)
+                            new_repeat = max(1, p.repeat - repeats_to_cut)
+                            saved_min = (p.repeat - new_repeat) * single_cycle_min
+                            
+                            phases[idx] = WorkoutPhase(
+                                name=p.name,
+                                duration_min=p.duration_min,
+                                zone=p.zone,
+                                target_power_pct=p.target_power_pct,
+                                target_hr_zone=p.target_hr_zone,
+                                description=p.description,
+                                repeat=new_repeat,
+                            )
+                            if idx + 1 < len(phases) and phases[idx + 1].repeat == p.repeat:
+                                p_rec = phases[idx + 1]
+                                phases[idx + 1] = WorkoutPhase(
+                                    name=p_rec.name,
+                                    duration_min=p_rec.duration_min,
+                                    zone=p_rec.zone,
+                                    target_power_pct=p_rec.target_power_pct,
+                                    target_hr_zone=p_rec.target_hr_zone,
+                                    description=p_rec.description,
+                                    repeat=new_repeat,
+                                )
+                            remaining_to_reduce -= saved_min
+                            if remaining_to_reduce <= 0.5:
+                                break
+
+        elif diff < 0:
+            # Workout is TOO SHORT. Add `abs(diff)` to the last phase (Cooldown or Endurance)
+            needed_min = abs(diff)
+            target_idx = len(phases) - 1
+            p = phases[target_idx]
+            phases[target_idx] = WorkoutPhase(
+                name=p.name,
+                duration_min=round(p.duration_min + (needed_min / max(1, p.repeat)), 1),
+                zone=p.zone,
+                target_power_pct=p.target_power_pct,
+                target_hr_zone=p.target_hr_zone,
+                description=p.description,
+                repeat=p.repeat,
+            )
+
+        candidate.phases = phases
+        return candidate
+
     async def generate_week(
         self, body: WeeklyPlanCreateRequest
     ) -> AsyncGenerator[dict[str, Any], None]:
@@ -190,7 +289,9 @@ class WeeklyCoachingAgent(CoachingAgent):
                         "name": route.name,
                         "distance_km": round(route.distance_m / 1000, 1),
                         "elevation_gain_m": round(route.elevation_gain_m, 0),
+                        "max_elevation_m": round(route.max_elevation_m, 0) if route.max_elevation_m else None,
                         "terrain_score": route.terrain_score,
+                        "climbs": route.climb_profile[:6] if route.climb_profile else [],
                     }
             schedules_context.append(sc_data)
 
@@ -311,11 +412,12 @@ class WeeklyCoachingAgent(CoachingAgent):
                 plan_data = None
                 continue
 
-            yield {
-                "event": "error",
-                "data": "Weekly plan validation failed after retry: " + "; ".join(validation_errors),
-            }
-            return
+                if fn_name == "final_answer":
+                    plan_data = fn_args
+                    break
+
+            if plan_data is not None:
+                break
 
         if plan_data is None:
             yield {"event": "error", "data": "Agent did not produce a valid weekly plan"}
@@ -346,15 +448,21 @@ class WeeklyCoachingAgent(CoachingAgent):
                 rationale=d_spec["rationale"],
                 coach_notes=d_spec.get("coach_notes", ""),
             )
-            structured_text = WorkoutFormatter.to_intervals_icu(candidate)
-            total_min = sum(p.duration_min * max(1, p.repeat) for p in candidate.phases)
 
-            # Match route_id from schedule if provided
+            # Find target_duration_min from matching schedule
+            target_dur = 0.0
             matched_route_id = None
             for sched in body.schedules:
                 if sched.day_of_week == d_spec["day_of_week"]:
+                    target_dur = sched.duration_min
                     matched_route_id = sched.route_id
                     break
+
+            if target_dur > 0:
+                candidate = self._normalize_workout_duration(candidate, target_dur)
+
+            structured_text = WorkoutFormatter.to_intervals_icu(candidate)
+            total_min = sum(p.duration_min * max(1, p.repeat) for p in candidate.phases)
 
             workout_date = body.start_date + timedelta(days=d_spec["day_of_week"])
             workout = Workout(
@@ -406,8 +514,24 @@ class WeeklyCoachingAgent(CoachingAgent):
             route_text = ""
             if "route" in s:
                 r = s["route"]
-                route_text = f", Route: {r['name']} ({r['distance_km']} km, {r['elevation_gain_m']} m elevation, terrain score {r['terrain_score']})"
-            schedule_text += f"  - {day_name}: {s['duration_min']:.0f} min duration{route_text}\n"
+                ele_text = f", max ele {r['max_elevation_m']}m" if r.get("max_elevation_m") else ""
+                route_text = f", Route: {r['name']} ({r['distance_km']} km, {r['elevation_gain_m']} m elevation{ele_text}, terrain score {r['terrain_score']})"
+                if r.get("climbs"):
+                    route_text += "\n    Route Topography & Key Climbs:\n"
+                    # Average speed assumed ~23 km/h for endurance/warmup timing estimation
+                    for c in r["climbs"]:
+                        start_km = c.get("start_km", 0.0)
+                        end_km = c.get("end_km", 0.0)
+                        start_min = round(start_km * (60.0 / 23.0))
+                        end_min = round(end_km * (60.0 / 23.0))
+                        cat_str = f" ({c['category']})" if c.get("category") else ""
+                        route_text += (
+                            f"      * Climb: km {start_km:.1f} to {end_km:.1f} "
+                            f"(ESTIMATED RIDE WINDOW: min {start_min} to min {end_min}), "
+                            f"gain: {c.get('elevation_gain_m', 0):.0f}m, avg grade: {c.get('avg_grade_pct', 0):.1f}%{cat_str}\n"
+                        )
+
+            schedule_text += f"  - {day_name}: {s['duration_min']:.0f} min target duration{route_text}\n"
             if s.get("notes"):
                 schedule_text += f"    Notes for this day: {s['notes']}\n"
 
@@ -453,15 +577,20 @@ For days not requested by the athlete, do NOT output any workouts for that day (
    - Workouts should support progressive overloading (load_1 < load_2 < load_3). 
    - Incorporate structured intervals (Z3/Z4/Z5) depending on the athlete's requested duration and form.
    
-3. **Route Integration**:
-   - If a day includes an assigned route, you MUST design the workout to target that route's climbs and profile (e.g. Z4 climbing intervals).
+3. **Route Integration & Topography Alignment**:
+   - If a day includes an assigned route, inspect its key climb timing windows (e.g. "Climb: km 18 to 24.5 / ESTIMATED RIDE WINDOW: min 47 to min 64").
+   - High-intensity work (Z4/Z5 intervals, tempo efforts) MUST be executed ON the climbs (between climb start and end time windows).
+   - Set Warmup + Aerobic Prep duration so that the high-intensity intervals start exactly when reaching the climb.
+   - Descents and post-summit sections MUST be assigned to Z1/Z2 recovery or cooldown.
 
 4. **Hard Rules for every individual workout**:
+   - STRICT DURATION MATCHING: The total duration of all phases in a workout MUST strictly equal the requested duration for that day (e.g. if 105 min is requested, sum of all phase durations MUST equal 105 min).
+   - REPEAT CALCULATION MATH: Remember that a set with `repeat: N` multiplies the duration! For example, 3 repeats of (8 min interval + 8 min recovery) takes 3 * (8 + 8) = 48 minutes total, NOT 16 minutes. Calculate repeat set totals carefully when fitting into the day's target duration!
    - First phase of each workout = warmup: at most 75% FTP, at least 10 min
    - Last phase of each workout = cooldown: at most 75% FTP
    - `target_power_pct` must be a NUMBER, never a zone label
    - `target_hr_zone` only as numeric bpm range like "130-145" — NEVER "Z2"
-   - Use `repeat` for interval sets (e.g. 4 reps of 5min on / 3min off: one phase with duration_min=5, repeat=4 followed by one with duration_min=3, repeat=4)
+   - Use `repeat` for interval sets
 
 ## IMPORTANT: CALL final_answer IMMEDIATELY
 Do not write long text introductions. You must formulate the weekly plan and call the `final_answer` tool with the structured plan.

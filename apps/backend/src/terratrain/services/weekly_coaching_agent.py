@@ -174,16 +174,19 @@ class WeeklyCoachingAgent(CoachingAgent):
 
         if diff > 0:
             # Workout is TOO LONG. Reduce duration by `diff` minutes.
-            # 1. Try to reduce non-interval phases (cooldown, warmup, aerobic prep, endurance)
+            # 1. Flexible non-high-intensity phases (target_power_pct <= 78 or zone Z1/Z2 or name keywords)
             flexible_indices = [
                 i for i, p in enumerate(phases)
-                if p.repeat <= 1 and p.duration_min > 5 and any(kw in p.name.lower() or kw in p.zone.lower() for kw in ["cooldown", "warmup", "prep", "endurance", "z1", "z2", "recovery"])
+                if p.repeat <= 1 and p.duration_min > 3 and (
+                    (p.target_power_pct and p.target_power_pct <= 78) or
+                    any(kw in p.name.lower() or kw in (p.zone or "").lower() for kw in ["cooldown", "warmup", "prep", "endurance", "z1", "z2", "recovery", "spin", "steady", "commute", "easy"])
+                )
             ]
             
             remaining_to_reduce = diff
             for idx in reversed(flexible_indices):
                 p = phases[idx]
-                min_allowed = 5.0
+                min_allowed = 3.0 if any(kw in p.name.lower() for kw in ["cooldown", "warmup"]) else 5.0
                 can_reduce = max(0.0, p.duration_min - min_allowed)
                 reduction = min(remaining_to_reduce, can_reduce)
                 if reduction > 0:
@@ -200,7 +203,7 @@ class WeeklyCoachingAgent(CoachingAgent):
                     if remaining_to_reduce <= 0.5:
                         break
 
-            # 2. If still too long (because interval repeats were oversized), adjust repeat counts or cooldown
+            # 2. If still too long (because interval repeats were oversized), adjust repeat counts
             if remaining_to_reduce > 0.5:
                 for idx, p in enumerate(phases):
                     if p.repeat > 1:
@@ -438,7 +441,16 @@ class WeeklyCoachingAgent(CoachingAgent):
         await self._session.commit()
         await self._session.refresh(weekly_plan)
 
+        # Group body.schedules by day_of_week for multi-session support
+        from collections import defaultdict
+        schedules_by_day: dict[int, list] = defaultdict(list)
+        for sched in body.schedules:
+            schedules_by_day[sched.day_of_week].append(sched)
+
+        day_workout_counters: dict[int, int] = defaultdict(int)
+
         for d_spec in plan_data.get("daily_workouts", []):
+            dow = d_spec["day_of_week"]
             candidate = WorkoutPlan(
                 name=d_spec["name"],
                 workout_type=d_spec["workout_type"],
@@ -449,14 +461,19 @@ class WeeklyCoachingAgent(CoachingAgent):
                 coach_notes=d_spec.get("coach_notes", ""),
             )
 
-            # Find target_duration_min from matching schedule
-            target_dur = 0.0
-            matched_route_id = None
-            for sched in body.schedules:
-                if sched.day_of_week == d_spec["day_of_week"]:
-                    target_dur = sched.duration_min
-                    matched_route_id = sched.route_id
-                    break
+            # Match N-th workout on this day_of_week to N-th schedule item
+            matched_sched = None
+            day_schedules = schedules_by_day.get(dow, [])
+            idx = day_workout_counters[dow]
+            if idx < len(day_schedules):
+                matched_sched = day_schedules[idx]
+            elif day_schedules:
+                matched_sched = day_schedules[-1]
+
+            day_workout_counters[dow] += 1
+
+            target_dur = float(matched_sched.duration_min) if matched_sched and matched_sched.duration_min else 0.0
+            matched_route_id = matched_sched.route_id if matched_sched else None
 
             if target_dur > 0:
                 candidate = self._normalize_workout_duration(candidate, target_dur)

@@ -21,7 +21,7 @@ import {
   Trash,
 } from "lucide-react";
 
-import { api, API_BASE } from "@/lib/api";
+import { api, API_BASE, csrfHeaders } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
 import type { Route, Sport, WeeklyPlan, Workout, WorkoutPhase } from "@/lib/types";
@@ -123,14 +123,14 @@ export default function WeeklyPlannerPage() {
   // Fetch routes
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
-    queryFn: () => api.routes.list(athlete!.id),
+    queryFn: () => api.routes.list(),
     enabled: !!athlete,
   });
 
   // Fetch weekly plans
   const { data: weeklyPlans, refetch: refetchPlans } = useQuery({
     queryKey: ["weeklyPlans", athlete?.id],
-    queryFn: () => api.weeklyPlans.list(athlete!.id),
+    queryFn: () => api.weeklyPlans.list(),
     enabled: !!athlete,
   });
 
@@ -139,7 +139,7 @@ export default function WeeklyPlannerPage() {
     if (!athlete || !startDate) return;
     setDetectLoading(true);
     api.weeklyPlans
-      .detect(athlete.id, startDate, mesocycleType)
+      .detect(startDate, mesocycleType)
       .then((res) => {
         setDetection(res);
         setWeekType(res.recommended_week_type);
@@ -192,7 +192,6 @@ export default function WeeklyPlannerPage() {
     setGeneratedPlan(null);
 
     const body = {
-      athlete_id: athlete.id,
       start_date: startDate,
       mesocycle_type: mesocycleType,
       week_type: weekType,
@@ -210,7 +209,8 @@ export default function WeeklyPlannerPage() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/weekly-plans/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify(body),
         signal: controller.signal,
       });

@@ -39,7 +39,7 @@ export default function WorkoutsPage() {
 
   const { data: workouts } = useQuery({
     queryKey: ["workouts", athlete?.id],
-    queryFn: () => api.workouts.list(athlete!.id),
+    queryFn: () => api.workouts.list(),
     enabled: !!athlete,
   });
 

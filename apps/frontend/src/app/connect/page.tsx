@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bike, CheckCircle2, Dumbbell, Footprints, Snowflake, Waves } from "lucide-react";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 import { useAthleteStore } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/Button";
@@ -18,9 +19,19 @@ export default function ConnectPage() {
   const router = useRouter();
   const t = useT();
   const { status, setAthlete, markSynced } = useAthleteStore();
+  const { status: authStatus, bootstrap: bootstrapAuth } = useAuthStore();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Onboarding requires an authenticated session (no self-registration).
+  useEffect(() => {
+    if (mounted && authStatus === "idle") void bootstrapAuth();
+  }, [mounted, authStatus, bootstrapAuth]);
+
+  useEffect(() => {
+    if (authStatus === "anonymous") router.replace("/login");
+  }, [authStatus, router]);
 
   const [step, setStep] = useState<Step>("form");
   const [intervalsId, setIntervalsId] = useState("");
@@ -57,8 +68,8 @@ export default function ConnectPage() {
     }
 
     try {
-      const sync = await api.athletes.sync(created.id);
-      const fresh = await api.athletes.get(created.id);
+      const sync = await api.athletes.sync();
+      const fresh = await api.athletes.getMe();
       setLocalAthlete(fresh);
       setSyncResult(sync);
       setAthlete(fresh);

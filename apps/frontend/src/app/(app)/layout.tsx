@@ -1,12 +1,12 @@
 "use client";
 
-import { AthleteGate } from "@/components/layout/AthleteGate";
+import { AuthGate } from "@/components/layout/AuthGate";
 import { AppShell } from "@/components/layout/AppShell";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AthleteGate>
+    <AuthGate>
       <AppShell>{children}</AppShell>
-    </AthleteGate>
+    </AuthGate>
   );
 }

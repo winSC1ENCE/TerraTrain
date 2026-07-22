@@ -30,7 +30,7 @@ export default function CoachPage() {
 
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
-    queryFn: () => api.routes.list(athlete!.id),
+    queryFn: () => api.routes.list(),
     enabled: !!athlete,
   });
 
@@ -55,7 +55,6 @@ export default function CoachPage() {
     e.preventDefault();
     if (!athlete) return;
     start({
-      athlete_id: athlete.id,
       workout_type: workoutType,
       scheduled_date: scheduledDate || undefined,
       route_id: routeId || undefined,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAthleteStore } from "@/stores/athlete-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const t = useT();
   const { athlete, language, setLanguage, setAthlete, markSynced, clear } =
     useAthleteStore();
+  const logout = useAuthStore((s) => s.logout);
 
   const [name, setName] = useState(athlete?.name ?? "");
   const [sport, setSport] = useState<string>(athlete?.sport ?? "cycling");
@@ -50,7 +52,7 @@ export default function SettingsPage() {
         resting_hr: restingHr ? Number(restingHr) : undefined,
       };
       if (newApiKey.trim()) body.intervals_api_key = newApiKey.trim();
-      const updated = await api.athletes.update(athlete.id, body);
+      const updated = await api.athletes.update(body);
       setAthlete(updated);
       setNewApiKey("");
       setSaved(true);
@@ -65,8 +67,8 @@ export default function SettingsPage() {
     setSyncing(true);
     setSyncMsg(null);
     try {
-      const result = await api.athletes.sync(athlete.id);
-      const fresh = await api.athletes.get(athlete.id);
+      const result = await api.athletes.sync();
+      const fresh = await api.athletes.getMe();
       setAthlete(fresh);
       markSynced();
       setSyncMsg(t.settings.syncSuccess.replace("{n}", String(result.sessions_synced)));
@@ -79,7 +81,7 @@ export default function SettingsPage() {
 
   async function handleDisconnect() {
     if (!athlete) return;
-    await api.athletes.delete(athlete.id);
+    await api.athletes.delete();
     clear();
     router.replace("/connect");
   }
@@ -171,6 +173,25 @@ export default function SettingsPage() {
             </Button>
             {syncMsg && <span className="text-xs text-text-secondary">{syncMsg}</span>}
           </div>
+        </CardBody>
+      </Card>
+
+      {/* Account */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.settings.account}</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              await logout();
+              router.replace("/login");
+            }}
+          >
+            {t.settings.logout}
+          </Button>
         </CardBody>
       </Card>
 

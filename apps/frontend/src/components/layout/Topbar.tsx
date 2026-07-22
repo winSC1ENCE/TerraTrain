@@ -17,8 +17,8 @@ export function Topbar() {
     if (!athlete || syncing) return;
     setSyncing(true);
     try {
-      await api.athletes.sync(athlete.id);
-      const fresh = await api.athletes.get(athlete.id);
+      await api.athletes.sync();
+      const fresh = await api.athletes.getMe();
       setAthlete(fresh);
       markSynced();
     } finally {

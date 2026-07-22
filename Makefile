@@ -74,21 +74,17 @@ build-frontend: ## Build frontend image only
 
 # ── Database ──────────────────────────────────────────────────────────────────
 migrate: ## Apply all pending Alembic migrations
-	PYTHONPATH=$(BACKEND_DIR)/src uv run alembic \
-	  --config $(BACKEND_DIR)/alembic.ini upgrade head
+	cd $(BACKEND_DIR) && uv run alembic upgrade head
 
 migrate-new: ## Create a new migration (usage: make migrate-new MSG="add foo table")
 	@[ -n "$(MSG)" ] || (echo "Usage: make migrate-new MSG='description'" && exit 1)
-	PYTHONPATH=$(BACKEND_DIR)/src uv run alembic \
-	  --config $(BACKEND_DIR)/alembic.ini revision --autogenerate -m "$(MSG)"
+	cd $(BACKEND_DIR) && uv run alembic revision --autogenerate -m "$(MSG)"
 
 migrate-down: ## Roll back the last migration
-	PYTHONPATH=$(BACKEND_DIR)/src uv run alembic \
-	  --config $(BACKEND_DIR)/alembic.ini downgrade -1
+	cd $(BACKEND_DIR) && uv run alembic downgrade -1
 
 migrate-history: ## Show Alembic migration history
-	PYTHONPATH=$(BACKEND_DIR)/src uv run alembic \
-	  --config $(BACKEND_DIR)/alembic.ini history --verbose
+	cd $(BACKEND_DIR) && uv run alembic history --verbose
 
 # ── Data / AI ─────────────────────────────────────────────────────────────────
 seed: ## Seed DB with development fixtures

@@ -15,11 +15,6 @@ services:
       --port 8000
 
   frontend:
-    build:
-      context: ./apps/frontend
-      dockerfile: ../../docker/frontend.Dockerfile
-      target: deps
     volumes:
-      - ./apps/frontend:/app:cached
-      - /app/node_modules
-    command: npm run dev
+      - ./apps/frontend/src:/app/src:cached
+      - ./apps/frontend/public:/app/public:cached

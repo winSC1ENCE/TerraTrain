@@ -161,14 +161,9 @@ from terratrain.services.workout_normalizer import normalize_workout_duration
 class WeeklyCoachingAgent(CoachingAgent):
 
     async def generate_week(
-        self, body: WeeklyPlanCreateRequest
+        self, athlete: Athlete, body: WeeklyPlanCreateRequest
     ) -> AsyncGenerator[dict[str, Any], None]:
         yield {"event": "thinking", "data": "Gathering athlete context..."}
-
-        athlete = await self._session.get(Athlete, body.athlete_id)
-        if not athlete:
-            yield {"event": "error", "data": "Athlete not found"}
-            return
 
         # 1. Fetch PMC and history
         pmc = await self._get_pmc(athlete)

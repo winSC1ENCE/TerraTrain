@@ -39,7 +39,8 @@ dependencies = [
     # Security / encryption
     "cryptography>=44",
     "python-jose[cryptography]>=3.3",
-    "passlib[bcrypt]>=1.7",
+    "bcrypt>=4.1",
+    "slowapi>=0.1",
 
     # Observability
     "structlog>=24",
@@ -54,7 +55,6 @@ dev = [
     "anyio>=4",
     "ruff>=0.9",
     "mypy>=1.14",
-    "types-passlib",
     "factory-boy>=3.3",
     "respx>=0.21",
     "testcontainers[postgres]>=4.8",

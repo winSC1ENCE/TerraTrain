@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,8 +11,13 @@ class Athlete(Base, TimestampMixin):
     __tablename__ = "athletes"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
     intervals_user_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    strava_athlete_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     sport: Mapped[str] = mapped_column(String(32), nullable=False)  # cycling|running|triathlon
 
@@ -29,6 +34,9 @@ class Athlete(Base, TimestampMixin):
     intervals_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
+    user: Mapped["User"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        back_populates="athlete"
+    )
     routes: Mapped[list["Route"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         back_populates="athlete", cascade="all, delete-orphan"
     )
@@ -37,7 +45,4 @@ class Athlete(Base, TimestampMixin):
     )
     training_sessions: Mapped[list["TrainingSession"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         back_populates="athlete", cascade="all, delete-orphan"
-    )
-    strava_token: Mapped["StravaToken | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
-        back_populates="athlete", cascade="all, delete-orphan", uselist=False
     )

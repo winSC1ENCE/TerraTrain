@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 
 class CoachingRequest(BaseModel):
-    athlete_id: uuid.UUID
     route_id: uuid.UUID | None = None
     workout_type: str
     scheduled_date: date | None = None

@@ -29,7 +29,6 @@ flowchart TB
 
     subgraph Extern
         IC["Intervals.icu REST API"]
-        ST["Strava OAuth API"]
     end
 
     FE -->|"REST (Athleten, Routen, Workouts)"| BE
@@ -38,7 +37,6 @@ flowchart TB
     BE -->|"Chat / Tool-Use"| OL
     BE -->|"Embeddings (RAG)"| OL
     BE -->|"Sync Profil + Sessions<br/>Push Workout"| IC
-    BE -->|"OAuth-Flow, Wellness-Fallback"| ST
 ```
 
 **Warum lokal und nicht Cloud-LLM?** Trainingsdaten (Leistungswerte, Gesundheitsmetriken) bleiben
@@ -49,18 +47,25 @@ auf CPU bis `llama3.3:70b` auf potenter GPU-Hardware.
 
 ```mermaid
 erDiagram
+    USERS ||--o| ATHLETES : "besitzt Profil"
     ATHLETES ||--o{ ROUTES : "lädt hoch"
     ATHLETES ||--o{ WORKOUTS : "erhält"
     ATHLETES ||--o{ TRAINING_SESSIONS : "synchronisiert"
-    ATHLETES ||--o| STRAVA_TOKENS : "verbindet"
     ATHLETES ||--o{ WEEKLY_PLANS : "erstellt"
     WEEKLY_PLANS ||--o{ WORKOUTS : "beinhaltet"
     ROUTES ||--o{ WORKOUTS : "referenziert"
 
+    USERS {
+        uuid id PK
+        string email
+        string hashed_password
+        string role
+        boolean is_active
+    }
     ATHLETES {
         uuid id PK
+        uuid user_id FK
         string intervals_user_id
-        string strava_athlete_id
         string name
         string sport
         int ftp_watts
@@ -107,13 +112,6 @@ erDiagram
         datetime start_date
         float tss
         float avg_power_watts
-    }
-    STRAVA_TOKENS {
-        uuid id PK
-        uuid athlete_id FK
-        text access_token_encrypted
-        text refresh_token_encrypted
-        datetime expires_at
     }
     DOCUMENT_CHUNKS {
         uuid id PK

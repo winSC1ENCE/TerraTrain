@@ -54,14 +54,32 @@ class Settings(BaseSettings):
     # Intervals.icu
     intervals_api_base_url: str = "https://intervals.icu/api/v1"
 
-    # Strava
-    strava_client_id: str = ""
-    strava_client_secret: str = ""
-    strava_redirect_uri: str = "http://localhost:8000/api/v1/auth/strava/callback"
-
     # Security
     secret_key: str = "change-me"
     encryption_key: str = "change-me"
+
+    # Auth / JWT sessions
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 30
+    access_token_cookie_name: str = "terratrain_access"
+    refresh_token_cookie_name: str = "terratrain_refresh"
+    # Double-submit CSRF token: readable by JS (NOT httpOnly), echoed back as a
+    # header on state-changing requests and compared server-side.
+    csrf_cookie_name: str = "terratrain_csrf"
+    csrf_header_name: str = "X-CSRF-Token"
+    # Explicit override for the Secure cookie flag; None => resolve from app_env.
+    secure_cookies_override: bool | None = None
+
+    @property
+    def secure_cookies(self) -> bool:
+        """Cookies require HTTPS in production; disabled for local http development."""
+        if self.secure_cookies_override is not None:
+            return self.secure_cookies_override
+        return self.app_env == "production"
+
+    # Initial admin seed (first boot only, if no admin user exists)
+    initial_admin_email: str = "admin@terratrain.app"
 
     # RAG
     rag_chunk_size: int = 512

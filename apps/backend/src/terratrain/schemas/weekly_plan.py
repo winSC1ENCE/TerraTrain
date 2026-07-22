@@ -14,7 +14,6 @@ class DailyScheduleInput(BaseModel):
 
 
 class WeeklyPlanCreateRequest(BaseModel):
-    athlete_id: uuid.UUID
     start_date: date
     mesocycle_type: str  # "3-1" or "2-1"
     week_type: str  # "load_1", "load_2", "load_3", "recovery"

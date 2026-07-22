@@ -35,7 +35,6 @@ class AthleteResponse(BaseModel):
 
     id: uuid.UUID
     intervals_user_id: str
-    strava_athlete_id: str | None
     name: str
     sport: str
     ftp_watts: int | None

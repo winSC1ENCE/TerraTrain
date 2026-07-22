@@ -45,6 +45,18 @@ async def upload_route(
     return route
 
 
+def _ensure_track_points(route: Route) -> Route:
+    if not isinstance(route.analysis, dict):
+        route.analysis = {}
+    if "track_points" not in route.analysis and route.gpx_data:
+        try:
+            an = GpxAnalyzer.analyze(route.gpx_data)
+            route.analysis["track_points"] = an.get("analysis", {}).get("track_points", [])
+        except Exception:
+            route.analysis["track_points"] = []
+    return route
+
+
 @router.get("/routes/{route_id}", response_model=RouteResponse)
 async def get_route(
     route_id: uuid.UUID,
@@ -53,7 +65,7 @@ async def get_route(
     route = await session.get(Route, route_id)
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
-    return route
+    return _ensure_track_points(route)
 
 
 @router.get("/athletes/{athlete_id}/routes", response_model=list[RouteResponse])
@@ -62,7 +74,8 @@ async def list_routes(
     session: AsyncSession = Depends(get_session),
 ) -> list[Route]:
     result = await session.execute(select(Route).where(Route.athlete_id == athlete_id))
-    return list(result.scalars().all())
+    routes = list(result.scalars().all())
+    return [_ensure_track_points(r) for r in routes]
 
 
 @router.delete("/routes/{route_id}", status_code=status.HTTP_204_NO_CONTENT)

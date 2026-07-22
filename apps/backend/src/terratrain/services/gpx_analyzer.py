@@ -56,6 +56,19 @@ class GpxAnalyzer:
         climbs = GpxAnalyzer._detect_climbs(df)
         terrain_score = GpxAnalyzer._compute_terrain_score(gain, distance_m, climbs)
 
+        # Downsample points for lightweight map rendering (max 300 points)
+        step = max(1, len(df) // 300)
+        sample_rows = df.gather_every(step).to_dicts()
+        track_points = [
+            {
+                "lat": round(float(r["lat"]), 6),
+                "lon": round(float(r["lon"]), 6),
+                "ele": round(float(r["ele"]), 1),
+                "km": round(float(r["cumulative_m"]) / 1000.0, 3),
+            }
+            for r in sample_rows
+        ]
+
         return {
             "distance_m": distance_m,
             "elevation_gain_m": gain,
@@ -70,6 +83,7 @@ class GpxAnalyzer:
                 "distance_km": round(distance_m / 1000, 2),
                 "elevation_gain_m": round(gain, 1),
                 "climb_count": len(climbs),
+                "track_points": track_points,
             },
         }
 

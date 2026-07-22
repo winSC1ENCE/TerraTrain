@@ -26,6 +26,7 @@ interface RouteMapProps {
   trackPoints: TrackPoint[];
   climbs: ClimbSegmentData[];
   activeClimbIndex?: number | null;
+  hoveredPoint?: TrackPoint | null;
   onClimbClick?: (index: number) => void;
 }
 
@@ -41,11 +42,13 @@ export default function RouteMap({
   trackPoints,
   climbs,
   activeClimbIndex,
+  hoveredPoint,
   onClimbClick,
 }: RouteMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const climbPolylinesRef = useRef<L.Polyline[]>([]);
+  const hoverMarkerRef = useRef<L.Marker | null>(null);
 
   useEffect(() => {
     if (!mapContainerRef.current || !trackPoints || trackPoints.length === 0) return;
@@ -200,6 +203,36 @@ export default function RouteMap({
       mapRef.current.fitBounds(poly.getBounds(), { padding: [50, 50], maxZoom: 15 });
     }
   }, [activeClimbIndex]);
+
+  // Handle elevation chart hover marker sync on map
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!hoveredPoint) {
+      if (hoverMarkerRef.current) {
+        map.removeLayer(hoverMarkerRef.current);
+        hoverMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const hoverIcon = L.divIcon({
+      className: "custom-map-icon hover-pulse-marker",
+      html: `<div style="background-color: #06b6d4; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(6, 182, 212, 0.9), 0 2px 6px rgba(0,0,0,0.5);"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+
+    if (hoverMarkerRef.current) {
+      hoverMarkerRef.current.setLatLng([hoveredPoint.lat, hoveredPoint.lon]);
+    } else {
+      hoverMarkerRef.current = L.marker([hoveredPoint.lat, hoveredPoint.lon], {
+        icon: hoverIcon,
+        zIndexOffset: 1000,
+      }).addTo(map);
+    }
+  }, [hoveredPoint]);
 
   return (
     <div className="relative w-full h-[340px] rounded-xl overflow-hidden border border-border shadow-inner bg-surface">

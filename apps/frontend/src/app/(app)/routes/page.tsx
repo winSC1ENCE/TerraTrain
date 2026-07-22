@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Eye, Map, Mountain, Pencil, Ruler, Trash, X, ArrowUpRight, ArrowDownRight, Layers, Flame } from "lucide-react";
@@ -14,11 +14,22 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { UploadZone } from "@/components/knowledge/UploadZone";
 import { formatDistance } from "@/lib/utils";
 
+import type { TrackPoint } from "@/components/routes/RouteMap";
+
 const RouteMap = dynamic(() => import("@/components/routes/RouteMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-[340px] bg-surface rounded-xl border border-border flex items-center justify-center text-text-muted text-xs animate-pulse">
       Karte wird geladen...
+    </div>
+  ),
+});
+
+const ElevationProfile = dynamic(() => import("@/components/routes/ElevationProfile"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[180px] bg-surface rounded-xl border border-border flex items-center justify-center text-text-muted text-xs animate-pulse">
+      Höhenprofil wird geladen...
     </div>
   ),
 });
@@ -48,6 +59,21 @@ export default function RoutesPage() {
 
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [activeClimbIndex, setActiveClimbIndex] = useState<number | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<TrackPoint | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedRoute(null);
+        setHoveredPoint(null);
+      }
+    };
+
+    if (selectedRoute) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedRoute]);
 
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
@@ -133,6 +159,7 @@ export default function RoutesPage() {
               onClick={() => {
                 setSelectedRoute(r);
                 setActiveClimbIndex(null);
+                setHoveredPoint(null);
               }}
             >
               <CardBody className="pt-4">
@@ -296,9 +323,21 @@ export default function RoutesPage() {
                   trackPoints={selectedRoute.analysis?.track_points || []}
                   climbs={selectedRoute.climb_profile}
                   activeClimbIndex={activeClimbIndex}
+                  hoveredPoint={hoveredPoint}
                   onClimbClick={(idx) => setActiveClimbIndex(idx)}
                 />
               </div>
+
+              {/* Elevation Profile Chart with Marked Climb Segments */}
+              {selectedRoute.analysis?.track_points && selectedRoute.analysis.track_points.length > 0 && (
+                <ElevationProfile
+                  trackPoints={selectedRoute.analysis.track_points}
+                  climbs={selectedRoute.climb_profile}
+                  activeClimbIndex={activeClimbIndex}
+                  onClimbClick={(idx) => setActiveClimbIndex(idx)}
+                  onHoverPoint={(pt) => setHoveredPoint(pt)}
+                />
+              )}
 
               {/* Metrics Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

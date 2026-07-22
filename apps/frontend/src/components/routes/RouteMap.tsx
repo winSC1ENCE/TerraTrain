@@ -88,9 +88,9 @@ export default function RouteMap({
 
     const map = mapRef.current;
 
-    // Clear previous layers
+    // Clear previous route polylines and static markers (preserving hover marker)
     map.eachLayer((layer) => {
-      if (layer instanceof L.Polyline || layer instanceof L.Marker) {
+      if (layer instanceof L.Polyline || (layer instanceof L.Marker && layer !== hoverMarkerRef.current)) {
         map.removeLayer(layer);
       }
     });
@@ -204,7 +204,7 @@ export default function RouteMap({
     }
   }, [activeClimbIndex]);
 
-  // Handle elevation chart hover marker sync on map
+  // Handle elevation chart hover marker sync & auto-panning on map
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -217,20 +217,41 @@ export default function RouteMap({
       return;
     }
 
-    const hoverIcon = L.divIcon({
-      className: "custom-map-icon hover-pulse-marker",
-      html: `<div style="background-color: #06b6d4; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(6, 182, 212, 0.9), 0 2px 6px rgba(0,0,0,0.5);"></div>`,
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
-    });
+    const pointLatLng: L.LatLngTuple = [hoveredPoint.lat, hoveredPoint.lon];
+    const badgeText = `km ${hoveredPoint.km.toFixed(1)} · ${Math.round(hoveredPoint.ele)}m`;
 
-    if (hoverMarkerRef.current) {
-      hoverMarkerRef.current.setLatLng([hoveredPoint.lat, hoveredPoint.lon]);
-    } else {
-      hoverMarkerRef.current = L.marker([hoveredPoint.lat, hoveredPoint.lon], {
+    if (!hoverMarkerRef.current) {
+      const hoverIcon = L.divIcon({
+        className: "hover-marker-node",
+        html: `
+          <div style="position: relative; width: 0; height: 0; display: flex; align-items: center; justify-content: center; z-index: 9999;">
+            <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background-color: rgba(6, 182, 212, 0.4); transform: translate(-50%, -50%);"></div>
+            <div style="position: absolute; width: 14px; height: 14px; border-radius: 50%; background-color: #06b6d4; border: 2.5px solid white; box-shadow: 0 0 12px rgba(6, 182, 212, 1), 0 2px 8px rgba(0,0,0,0.6); transform: translate(-50%, -50%);"></div>
+            <div id="hover-marker-badge" style="position: absolute; left: 14px; top: -12px; white-space: nowrap; background: rgba(15, 23, 42, 0.95); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.5); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; font-family: system-ui, -apple-system, sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.5); pointer-events: none;">
+              ${badgeText}
+            </div>
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      hoverMarkerRef.current = L.marker(pointLatLng, {
         icon: hoverIcon,
-        zIndexOffset: 1000,
+        zIndexOffset: 10000,
       }).addTo(map);
+    } else {
+      hoverMarkerRef.current.setLatLng(pointLatLng);
+      const el = hoverMarkerRef.current.getElement();
+      if (el) {
+        const badgeEl = el.querySelector("#hover-marker-badge");
+        if (badgeEl) badgeEl.textContent = badgeText;
+      }
+    }
+
+    // Auto-pan map if marker moves outside current visible map bounds
+    if (!map.getBounds().contains(pointLatLng)) {
+      map.panTo(pointLatLng, { animate: false });
     }
   }, [hoveredPoint]);
 

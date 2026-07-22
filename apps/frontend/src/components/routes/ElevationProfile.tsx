@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -33,6 +33,82 @@ function getCategoryLabel(category?: string | null): string {
   return category.toUpperCase();
 }
 
+function findExactTrackPoint(allTrackPoints: TrackPoint[], targetKm: number): TrackPoint | null {
+  if (!allTrackPoints || allTrackPoints.length === 0) return null;
+  let low = 0;
+  let high = allTrackPoints.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (allTrackPoints[mid].km < targetKm) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  if (low >= allTrackPoints.length) return allTrackPoints[allTrackPoints.length - 1];
+  if (low === 0) return allTrackPoints[0];
+  const prev = allTrackPoints[low - 1];
+  const next = allTrackPoints[low];
+  return Math.abs(prev.km - targetKm) < Math.abs(next.km - targetKm) ? prev : next;
+}
+
+function CustomTooltip({
+  active,
+  payload,
+  climbs,
+  allTrackPoints,
+  onHoverPoint,
+}: {
+  active?: boolean;
+  payload?: any[];
+  climbs: ClimbSegmentData[];
+  allTrackPoints: TrackPoint[];
+  onHoverPoint?: (point: TrackPoint | null) => void;
+}) {
+  const sampledPt = active && payload && payload.length > 0 ? (payload[0].payload as TrackPoint) : null;
+  const exactPt = useMemo(() => {
+    if (!sampledPt) return null;
+    return findExactTrackPoint(allTrackPoints, sampledPt.km) || sampledPt;
+  }, [sampledPt, allTrackPoints]);
+
+  useEffect(() => {
+    if (onHoverPoint) {
+      onHoverPoint(exactPt);
+    }
+  }, [exactPt, onHoverPoint]);
+
+  if (!active || !exactPt) return null;
+
+  const inClimbIndex = climbs.findIndex(
+    (c) => exactPt.km >= c.start_km && exactPt.km <= c.end_km
+  );
+  const activeClimb = inClimbIndex >= 0 ? climbs[inClimbIndex] : null;
+
+  return (
+    <div className="bg-bg/95 backdrop-blur-md border border-border p-2.5 rounded-lg shadow-xl text-xs space-y-1 z-50 pointer-events-none">
+      <div className="font-semibold text-text flex items-center justify-between gap-3">
+        <span>km {exactPt.km.toFixed(1)}</span>
+        <span className="text-accent font-bold">{Math.round(exactPt.ele)} m</span>
+      </div>
+
+      {activeClimb && (
+        <div
+          className="pt-1 mt-1 border-t border-border/60 text-[11px]"
+          style={{ color: getCategoryColor(activeClimb.category) }}
+        >
+          <div className="font-bold flex items-center justify-between gap-2">
+            <span>{getCategoryLabel(activeClimb.category)}</span>
+            <span>Ø {activeClimb.avg_grade_pct}%</span>
+          </div>
+          <div className="text-text-muted text-[10px]">
+            km {activeClimb.start_km} – {activeClimb.end_km} (+{Math.round(activeClimb.elevation_gain_m)} hm)
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ElevationProfile({
   trackPoints,
   climbs,
@@ -40,12 +116,13 @@ export default function ElevationProfile({
   onClimbClick,
   onHoverPoint,
 }: ElevationProfileProps) {
-  // Downsample track points if necessary to keep rendering snappy while preserving elevation fidelity
+  // Downsample track points for chart rendering efficiency while preserving high resolution
   const chartData = useMemo(() => {
     if (!trackPoints || trackPoints.length === 0) return [];
     
-    // If more than 600 points, sample evenly
-    const step = trackPoints.length > 600 ? Math.ceil(trackPoints.length / 600) : 1;
+    // Sample to max 1200 points for smooth performance and high resolution
+    const maxPoints = 1200;
+    const step = trackPoints.length > maxPoints ? Math.ceil(trackPoints.length / maxPoints) : 1;
     const sampled: Array<TrackPoint & { eleRounded: number; kmRounded: number }> = [];
 
     for (let i = 0; i < trackPoints.length; i += step) {
@@ -148,40 +225,7 @@ export default function ElevationProfile({
             />
 
             <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload || !payload.length) return null;
-                const pt = payload[0].payload as TrackPoint;
-                
-                // Find if point is inside a climb
-                const inClimbIndex = climbs.findIndex(
-                  (c) => pt.km >= c.start_km && pt.km <= c.end_km
-                );
-                const activeClimb = inClimbIndex >= 0 ? climbs[inClimbIndex] : null;
-
-                return (
-                  <div className="bg-bg/95 backdrop-blur-md border border-border p-2.5 rounded-lg shadow-xl text-xs space-y-1 z-50">
-                    <div className="font-semibold text-text flex items-center justify-between gap-3">
-                      <span>km {pt.km.toFixed(1)}</span>
-                      <span className="text-accent font-bold">{Math.round(pt.ele)} m</span>
-                    </div>
-
-                    {activeClimb && (
-                      <div
-                        className="pt-1 mt-1 border-t border-border/60 text-[11px]"
-                        style={{ color: getCategoryColor(activeClimb.category) }}
-                      >
-                        <div className="font-bold flex items-center justify-between gap-2">
-                          <span>{getCategoryLabel(activeClimb.category)}</span>
-                          <span>Ø {activeClimb.avg_grade_pct}%</span>
-                        </div>
-                        <div className="text-text-muted text-[10px]">
-                          km {activeClimb.start_km} – {activeClimb.end_km} (+{Math.round(activeClimb.elevation_gain_m)} hm)
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              }}
+              content={<CustomTooltip climbs={climbs} allTrackPoints={trackPoints} onHoverPoint={onHoverPoint} />}
             />
 
             {/* Render climb segment reference areas */}
@@ -202,10 +246,8 @@ export default function ElevationProfile({
                   strokeOpacity={isActive ? 1.0 : 0.6}
                   strokeWidth={isActive ? 2 : 1}
                   strokeDasharray={isActive ? undefined : "3 3"}
-                  className="cursor-pointer transition-all hover:fill-opacity-30"
-                  onClick={() => {
-                    if (onClimbClick) onClimbClick(idx);
-                  }}
+                  style={{ pointerEvents: "none" }}
+                  className="transition-all"
                 />
               );
             })}

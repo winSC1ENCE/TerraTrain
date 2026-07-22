@@ -19,11 +19,14 @@ class Athlete(Base, TimestampMixin):
     )
     intervals_user_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    sport: Mapped[str] = mapped_column(String(32), nullable=False)  # cycling|running|triathlon
+    # cycling|running|swimming|cross_country_skiing|weight_training (see constants.Sport)
+    sport: Mapped[str] = mapped_column(String(32), nullable=False)
 
     # Physiological parameters
     ftp_watts: Mapped[int | None] = mapped_column(nullable=True)
     threshold_pace_s_per_m: Mapped[float | None] = mapped_column(nullable=True)
+    # Critical Swim Speed threshold, seconds per 100m — drives swim training zones.
+    css_pace_s_per_100m: Mapped[float | None] = mapped_column(nullable=True)
     lthr: Mapped[int | None] = mapped_column(nullable=True)
     max_hr: Mapped[int | None] = mapped_column(nullable=True)
     resting_hr: Mapped[int | None] = mapped_column(nullable=True)

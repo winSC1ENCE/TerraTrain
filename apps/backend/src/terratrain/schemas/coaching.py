@@ -11,6 +11,7 @@ class CoachingRequest(BaseModel):
     notes: str | None = None
     auto_push: bool = False
     provider: str | None = None
+    press_lap: bool = False
 
 
 class CoachingSSEEvent(BaseModel):

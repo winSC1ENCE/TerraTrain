@@ -20,6 +20,7 @@ class WeeklyPlanCreateRequest(BaseModel):
     schedules: list[DailyScheduleInput]
     notes: str | None = None
     provider: str | None = None
+    press_lap: bool = False
 
 
 class WeeklyPlanResponse(BaseModel):

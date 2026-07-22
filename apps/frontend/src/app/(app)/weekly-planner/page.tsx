@@ -24,9 +24,10 @@ import {
 import { api, API_BASE } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
-import type { Route, WeeklyPlan, Workout, WorkoutPhase } from "@/lib/types";
+import type { Route, Sport, WeeklyPlan, Workout, WorkoutPhase } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { StreamPanel } from "@/components/coach/StreamPanel";
@@ -77,6 +78,7 @@ export default function WeeklyPlannerPage() {
   const [weekType, setWeekType] = useState("load_1");
   const [globalNotes, setGlobalNotes] = useState("");
   const [provider, setProvider] = useState("ollama");
+  const [pressLap, setPressLap] = useState(false);
 
   // Day schedules setup
   const [schedules, setSchedules] = useState<ScheduleItem[]>(() => [
@@ -113,6 +115,8 @@ export default function WeeklyPlannerPage() {
   const [editingWorkout, setEditingWorkout] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editStructuredText, setEditStructuredText] = useState("");
+  const [editSport, setEditSport] = useState<Sport>("cycling");
+  const [editPressLap, setEditPressLap] = useState(false);
   const [savingWorkout, setSavingWorkout] = useState(false);
   const [pushingAll, setPushingAll] = useState(false);
 
@@ -200,6 +204,7 @@ export default function WeeklyPlannerPage() {
       })),
       notes: globalNotes || null,
       provider: provider,
+      press_lap: pressLap,
     };
 
     try {
@@ -331,6 +336,8 @@ export default function WeeklyPlannerPage() {
     setEditingWorkout(w.id);
     setEditName(w.name);
     setEditStructuredText(w.structured_text ?? "");
+    setEditSport(w.sport);
+    setEditPressLap(w.press_lap);
   }
 
   async function handleSaveWorkout() {
@@ -340,6 +347,8 @@ export default function WeeklyPlannerPage() {
       await api.workouts.update(editingWorkout, {
         name: editName,
         structured_text: editStructuredText,
+        sport: editSport,
+        press_lap: editPressLap,
       });
       const fullPlan = await api.weeklyPlans.get(generatedPlan.id);
       setGeneratedPlan(fullPlan);
@@ -586,6 +595,13 @@ export default function WeeklyPlannerPage() {
                       onChange={(e) => setGlobalNotes(e.target.value)}
                       placeholder="Z. B. 'Fokus auf Klettern' oder 'Bin leicht erkältet'..."
                       rows={3}
+                    />
+
+                    <Checkbox
+                      label={t.workouts.pressLap}
+                      hint={t.workouts.pressLapHint}
+                      checked={pressLap}
+                      onChange={setPressLap}
                     />
 
                     <Button
@@ -890,6 +906,21 @@ export default function WeeklyPlannerPage() {
                                           </div>
 
                                           <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-text-muted">{t.settings.sport}</label>
+                                            <select
+                                              value={editSport}
+                                              onChange={(e) => setEditSport(e.target.value as Sport)}
+                                              className="w-full px-3 py-2 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                                            >
+                                              <option value="cycling">{t.settings.sports.cycling}</option>
+                                              <option value="running">{t.settings.sports.running}</option>
+                                              <option value="swimming">{t.settings.sports.swimming}</option>
+                                              <option value="cross_country_skiing">{t.settings.sports.cross_country_skiing}</option>
+                                              <option value="weight_training">{t.settings.sports.weight_training}</option>
+                                            </select>
+                                          </div>
+
+                                          <div className="space-y-1">
                                             <label className="text-xs font-semibold text-text-muted">Intervals.icu Schritte</label>
                                             <textarea
                                               value={editStructuredText}
@@ -898,6 +929,13 @@ export default function WeeklyPlannerPage() {
                                               className="w-full px-3 py-2 text-sm font-mono bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
                                             />
                                           </div>
+
+                                          <Checkbox
+                                            label={t.workouts.pressLap}
+                                            hint={t.workouts.pressLapHint}
+                                            checked={editPressLap}
+                                            onChange={setEditPressLap}
+                                          />
 
                                           <div className="flex gap-2 justify-end pt-2">
                                             <Button size="sm" variant="secondary" onClick={() => setEditingWorkout(null)}>

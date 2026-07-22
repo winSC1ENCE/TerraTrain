@@ -39,6 +39,7 @@ async def generate_workout(
             notes=body.notes,
             auto_push=body.auto_push,
             provider=body.provider,
+            press_lap=body.press_lap,
         ):
             yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
 

@@ -9,6 +9,7 @@ from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.workout import Workout
 from terratrain.schemas.workout import WorkoutResponse, WorkoutUpdate
 from terratrain.services.intervals_client import IntervalsClient
+from terratrain.services.workout_formatter import WorkoutFormatter
 
 router = APIRouter()
 
@@ -41,8 +42,18 @@ async def update_workout(
 ) -> Workout:
     workout = await _get_owned_workout(workout_id, athlete, session)
 
-    for field, value in body.model_dump(exclude_none=True).items():
+    # press_lap is handled separately below since it also drives a
+    # structured_text rewrite, not just a plain column assignment.
+    updates = body.model_dump(exclude_none=True, exclude={"press_lap"})
+    for field, value in updates.items():
         setattr(workout, field, value)
+
+    if body.press_lap is not None:
+        workout.press_lap = body.press_lap
+        if workout.structured_text is not None:
+            workout.structured_text = WorkoutFormatter.apply_press_lap(
+                workout.structured_text, body.press_lap
+            )
 
     await session.commit()
     await session.refresh(workout)

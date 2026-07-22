@@ -42,6 +42,7 @@ export default function SettingsPage() {
     try {
       const body: Record<string, unknown> = {
         name: name.trim() || undefined,
+        sport: sport || undefined,
         ftp_watts: ftp ? Number(ftp) : undefined,
         weight_kg: weight ? Number(weight) : undefined,
         lthr: lthr ? Number(lthr) : undefined,
@@ -103,7 +104,9 @@ export default function SettingsPage() {
               >
                 <option value="cycling">{t.settings.sports.cycling}</option>
                 <option value="running">{t.settings.sports.running}</option>
-                <option value="triathlon">{t.settings.sports.triathlon}</option>
+                <option value="swimming">{t.settings.sports.swimming}</option>
+                <option value="cross_country_skiing">{t.settings.sports.cross_country_skiing}</option>
+                <option value="weight_training">{t.settings.sports.weight_training}</option>
               </Select>
               <Input
                 label={t.settings.ftp}

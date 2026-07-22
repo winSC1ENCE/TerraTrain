@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bike, CheckCircle2, Footprints, Medal } from "lucide-react";
+import { Bike, CheckCircle2, Dumbbell, Footprints, Snowflake, Waves } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAthleteStore } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
@@ -98,7 +98,17 @@ export default function ConnectPage() {
                     options={[
                       { value: "cycling", label: t.settings.sports.cycling, icon: Bike },
                       { value: "running", label: t.settings.sports.running, icon: Footprints },
-                      { value: "triathlon", label: t.settings.sports.triathlon, icon: Medal },
+                      { value: "swimming", label: t.settings.sports.swimming, icon: Waves },
+                      {
+                        value: "cross_country_skiing",
+                        label: t.settings.sports.cross_country_skiing,
+                        icon: Snowflake,
+                      },
+                      {
+                        value: "weight_training",
+                        label: t.settings.sports.weight_training,
+                        icon: Dumbbell,
+                      },
                     ]}
                     value={sport}
                     onChange={setSport}

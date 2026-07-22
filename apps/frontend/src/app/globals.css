@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  /* Background layers — near-black graphite */
+  --color-bg: #0b0d0e;
+  --color-surface: #16181b;
+  --color-surface-2: #1e2126;
+  --color-border: #262a30;
+  --color-border-strong: #343a42;
+
+  /* Ink */
+  --color-text: #edf1ee;
+  --color-text-secondary: #a3aba5;
+  --color-text-muted: #697069;
+
+  /* Accent — lime on near-black */
+  --color-accent: #a3e635;
+  --color-accent-hover: #bef264;
+  --color-accent-muted: #65a30d;
+  --color-on-accent: #101401;
+
+  /* Status */
+  --color-success: #34d399;
+  --color-warning: #c98500;
+  --color-danger: #e66767;
+
+  /* Chart series (validated on surface) */
+  --color-ctl: #3987e5;
+  --color-atl: #d55181;
+  --color-tsb: #65a30d;
+
+  /* Training zones Z1-Z6 (Z4/Z5 CVD pair -> bars always carry text labels) */
+  --color-zone-1: #7189c9;
+  --color-zone-2: #3987e5;
+  --color-zone-3: #199e70;
+  --color-zone-4: #c98500;
+  --color-zone-5: #d95926;
+  --color-zone-6: #e66767;
+
+  /* Shape & type */
+  --radius-card: 0.75rem;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 30%, transparent);
+}
+
+/* Thin dark scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}

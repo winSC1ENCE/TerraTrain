@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      target: development
+    volumes:
+      - ./apps/backend/src:/app/src:cached
+      - ./data:/data
+      - ./scripts:/app/scripts:cached
+      - ./apps/backend/alembic:/app/alembic:cached
+      - ./apps/backend/alembic.ini:/app/alembic.ini:cached
+    command: >
+      uvicorn terratrain.main:app
+      --reload
+      --host 0.0.0.0
+      --port 8000
+
+  frontend:
+    volumes:
+      - ./apps/frontend/src:/app/src:cached
+      - ./apps/frontend/public:/app/public:cached

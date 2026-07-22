@@ -1,3 +1,13 @@
+# TerraTrain project-specific
+.env
+data/papers/*.pdf
+data/gpx/*.gpx
+htmlcov/
+uv.lock
+apps/frontend/node_modules/
+apps/frontend/.next/
+docker/nginx/certs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -216,3 +226,5 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+helper.md
+*.tsbuildinfo

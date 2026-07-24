@@ -62,6 +62,10 @@ WORKOUT_PLAN_TOOL_SCHEMA = {
                     "zone": {"type": "string"},
                     "target_power_pct": {"type": "number"},
                     "target_hr_zone": {"type": "string"},
+                    "target_cadence_rpm": {
+                        "type": "integer",
+                        "description": "Cycling only — optional target cadence in rpm (e.g. 90, 95, 100).",
+                    },
                     "description": {"type": "string"},
                     "repeat": {"type": "integer", "default": 1},
                 },
@@ -481,6 +485,7 @@ class CoachingAgent:
 - Total time at/above 95% FTP: maximum 60 min per session
 - `target_power_pct` must be a NUMBER (e.g. 95), never a zone label
 - `target_hr_zone` only as numeric bpm range like "130-145" — NEVER "Z2"
+- For cycling phases, include appropriate target cadence in rpm via `target_cadence_rpm` (e.g. 90 rpm for endurance/warmup, 95-100 rpm for threshold/VO2max, 80-85 rpm for climbing/torque).
 - Use `repeat` for interval sets
 - `target_tss` must match the phases (validator recomputes it; ±30% tolerance)"""
 

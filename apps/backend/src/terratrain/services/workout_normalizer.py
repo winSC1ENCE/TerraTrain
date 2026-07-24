@@ -40,6 +40,7 @@ def normalize_workout_duration(candidate: WorkoutPlan, target_duration_min: floa
                     zone=p.zone,
                     target_power_pct=p.target_power_pct,
                     target_hr_zone=p.target_hr_zone,
+                    target_cadence_rpm=p.target_cadence_rpm,
                     description=p.description,
                     repeat=p.repeat,
                 )
@@ -66,6 +67,7 @@ def normalize_workout_duration(candidate: WorkoutPlan, target_duration_min: floa
                             zone=p.zone,
                             target_power_pct=p.target_power_pct,
                             target_hr_zone=p.target_hr_zone,
+                            target_cadence_rpm=p.target_cadence_rpm,
                             description=p.description,
                             repeat=new_repeat,
                         )
@@ -77,6 +79,7 @@ def normalize_workout_duration(candidate: WorkoutPlan, target_duration_min: floa
                                 zone=p_rec.zone,
                                 target_power_pct=p_rec.target_power_pct,
                                 target_hr_zone=p_rec.target_hr_zone,
+                                target_cadence_rpm=p_rec.target_cadence_rpm,
                                 description=p_rec.description,
                                 repeat=new_repeat,
                             )
@@ -95,6 +98,7 @@ def normalize_workout_duration(candidate: WorkoutPlan, target_duration_min: floa
             zone=p.zone,
             target_power_pct=p.target_power_pct,
             target_hr_zone=p.target_hr_zone,
+            target_cadence_rpm=p.target_cadence_rpm,
             description=p.description,
             repeat=p.repeat,
         )

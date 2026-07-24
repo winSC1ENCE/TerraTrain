@@ -85,6 +85,10 @@ WEEKLY_PLAN_TOOL_SCHEMA = {
                                     "type": "string",
                                     "description": "Optional target HR bpm range like '130-145' or a single bpm value like '140'.",
                                 },
+                                "target_cadence_rpm": {
+                                    "type": "integer",
+                                    "description": "Cycling only — optional target cadence in rpm (e.g. 90, 95, 100).",
+                                },
                                 "description": {"type": "string", "default": "", "description": "Instructions for this phase."},
                                 "repeat": {
                                     "type": "integer",

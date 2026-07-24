@@ -12,6 +12,7 @@ class WorkoutPhase(BaseModel):
     zone: str
     target_power_pct: float | None = None
     target_hr_zone: str | None = None
+    target_cadence_rpm: int | None = None
     description: str = ""
     repeat: int = 1
 

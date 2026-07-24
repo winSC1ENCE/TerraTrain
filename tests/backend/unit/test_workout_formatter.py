@@ -39,6 +39,20 @@ def test_simple_warmup_interval_cooldown():
     assert "- Cooldown 10m 50%" in text
 
 
+def test_cycling_cadence_formatting():
+    plan = make_plan(
+        [
+            {"name": "Warmup", "duration_min": 15, "zone": "Z2", "target_power_pct": 65, "target_cadence_rpm": 90},
+            {"name": "Threshold", "duration_min": 20, "zone": "Z4", "target_power_pct": 100, "target_cadence_rpm": 95},
+        ]
+    )
+    text = WorkoutFormatter.to_intervals_icu(plan)
+    assert text == "- Warmup 15m 65% 90rpm\n- Threshold 20m 100% 95rpm"
+
+    text_lap = WorkoutFormatter.apply_press_lap(text, enabled=True)
+    assert text_lap == "- Press lap Warmup 15m 65% 90rpm\n- Press lap Threshold 20m 100% 95rpm"
+
+
 def test_repeat_block_formatted_correctly():
     plan = make_plan(
         [

@@ -151,9 +151,10 @@ class WorkoutFormatter:
         target = WorkoutFormatter._format_target(phase, sport, athlete)
         duration_str = WorkoutFormatter._format_duration(phase.duration_min)
         name = phase.name.strip()
+        cadence = WorkoutFormatter._format_cadence_suffix(phase, sport)
         if name:
-            return f"- {name} {duration_str} {target}"
-        return f"- {duration_str} {target}"
+            return f"- {name} {duration_str} {target}{cadence}"
+        return f"- {duration_str} {target}{cadence}"
 
     @staticmethod
     def _format_repeat_block(
@@ -164,11 +165,23 @@ class WorkoutFormatter:
             target = WorkoutFormatter._format_target(p, sport, athlete)
             duration_str = WorkoutFormatter._format_duration(p.duration_min)
             name = p.name.strip()
+            cadence = WorkoutFormatter._format_cadence_suffix(p, sport)
             if name:
-                lines.append(f"- {name} {duration_str} {target}")
+                lines.append(f"- {name} {duration_str} {target}{cadence}")
             else:
-                lines.append(f"- {duration_str} {target}")
+                lines.append(f"- {duration_str} {target}{cadence}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_cadence_suffix(phase: WorkoutPhase, sport: str) -> str:
+        if sport != Sport.CYCLING or phase.target_cadence_rpm is None:
+            return ""
+        cad_str = str(phase.target_cadence_rpm).strip()
+        if not cad_str:
+            return ""
+        if cad_str.lower().endswith("rpm"):
+            return f" {cad_str}"
+        return f" {cad_str}rpm"
 
     @staticmethod
     def _format_target(phase: WorkoutPhase, sport: str, athlete: Athlete | None) -> str:

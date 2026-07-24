@@ -35,6 +35,7 @@ async def generate_workout(
             athlete=athlete,
             route=route,
             workout_type=body.workout_type,
+            sport=body.sport,
             scheduled_date=body.scheduled_date,
             notes=body.notes,
             auto_push=body.auto_push,

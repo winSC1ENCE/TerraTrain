@@ -1,14 +1,16 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from terratrain.constants import SPORT_PATTERN
 from terratrain.schemas.workout import WorkoutResponse
 
 
 class DailyScheduleInput(BaseModel):
     day_of_week: int  # 0 (Monday) to 6 (Sunday)
     duration_min: float
+    sport: str | None = Field(default=None, pattern=SPORT_PATTERN)
     route_id: uuid.UUID | None = None
     notes: str | None = None
 

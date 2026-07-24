@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
 import { useCoachStream } from "@/hooks/useCoachStream";
 import { useT } from "@/lib/i18n";
-import type { WorkoutPhase } from "@/lib/types";
+import type { Sport, WorkoutPhase } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -20,6 +20,7 @@ export default function CoachPage() {
   const t = useT();
   const { events, plan, error, isStreaming, start, stop } = useCoachStream();
 
+  const [sport, setSport] = useState<Sport>(athlete?.sport ?? "cycling");
   const [workoutType, setWorkoutType] = useState("threshold");
   const [scheduledDate, setScheduledDate] = useState("");
   const [routeId, setRouteId] = useState("");
@@ -56,6 +57,7 @@ export default function CoachPage() {
     if (!athlete) return;
     start({
       workout_type: workoutType,
+      sport: sport,
       scheduled_date: scheduledDate || undefined,
       route_id: routeId || undefined,
       notes: notes || undefined,
@@ -83,7 +85,18 @@ export default function CoachPage() {
                 <WorkoutTypeSelector value={workoutType} onChange={setWorkoutType} />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Select
+                  label={t.settings.sport}
+                  value={sport}
+                  onChange={(e) => setSport(e.target.value as Sport)}
+                >
+                  <option value="cycling">{t.settings.sports.cycling}</option>
+                  <option value="running">{t.settings.sports.running}</option>
+                  <option value="swimming">{t.settings.sports.swimming}</option>
+                  <option value="cross_country_skiing">{t.settings.sports.cross_country_skiing}</option>
+                  <option value="weight_training">{t.settings.sports.weight_training}</option>
+                </Select>
                 <Select
                   label={t.coach.modelProvider}
                   value={provider}

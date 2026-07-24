@@ -236,6 +236,7 @@ class WeeklyCoachingAgent(CoachingAgent):
             sc_data: dict[str, Any] = {
                 "day_of_week": sched.day_of_week,
                 "duration_min": sched.duration_min,
+                "sport": sched.sport or athlete.sport,
                 "notes": sched.notes,
             }
             if sched.route_id:
@@ -407,16 +408,6 @@ class WeeklyCoachingAgent(CoachingAgent):
 
         for d_spec in plan_data.get("daily_workouts", []):
             dow = d_spec["day_of_week"]
-            candidate = WorkoutPlan(
-                name=d_spec["name"],
-                workout_type=d_spec["workout_type"],
-                sport=d_spec.get("sport", athlete.sport),
-                phases=[WorkoutPhase(**p) for p in d_spec.get("phases", [])],
-                exercises=[StrengthExercise(**e) for e in d_spec.get("exercises", [])],
-                target_tss=d_spec.get("target_tss", 0),
-                rationale=d_spec["rationale"],
-                coach_notes=d_spec.get("coach_notes", ""),
-            )
 
             # Match N-th workout on this day_of_week to N-th schedule item
             matched_sched = None
@@ -428,6 +419,20 @@ class WeeklyCoachingAgent(CoachingAgent):
                 matched_sched = day_schedules[-1]
 
             day_workout_counters[dow] += 1
+
+            sched_sport = matched_sched.sport if matched_sched and matched_sched.sport else None
+            effective_sport = d_spec.get("sport") or sched_sport or athlete.sport
+
+            candidate = WorkoutPlan(
+                name=d_spec["name"],
+                workout_type=d_spec["workout_type"],
+                sport=effective_sport,
+                phases=[WorkoutPhase(**p) for p in d_spec.get("phases", [])],
+                exercises=[StrengthExercise(**e) for e in d_spec.get("exercises", [])],
+                target_tss=d_spec.get("target_tss", 0),
+                rationale=d_spec["rationale"],
+                coach_notes=d_spec.get("coach_notes", ""),
+            )
 
             target_dur = float(matched_sched.duration_min) if matched_sched and matched_sched.duration_min else 0.0
             matched_route_id = matched_sched.route_id if matched_sched else None
@@ -513,7 +518,8 @@ class WeeklyCoachingAgent(CoachingAgent):
                             f"gain: {c.get('elevation_gain_m', 0):.0f}m, avg grade: {c.get('avg_grade_pct', 0):.1f}%{cat_str}\n"
                         )
 
-            schedule_text += f"  - {day_name}: {s['duration_min']:.0f} min target duration{route_text}\n"
+            sched_sport_str = f" ({s['sport']})" if s.get("sport") else ""
+            schedule_text += f"  - {day_name}{sched_sport_str}: {s['duration_min']:.0f} min target duration{route_text}\n"
             if s.get("notes"):
                 schedule_text += f"    Notes for this day: {s['notes']}\n"
 

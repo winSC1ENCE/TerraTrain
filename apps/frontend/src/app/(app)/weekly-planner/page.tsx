@@ -37,6 +37,7 @@ interface ScheduleItem {
   id: string;
   day_of_week: number;
   duration_min: number | "";
+  sport?: Sport;
   route_id: string;
   notes: string;
 }
@@ -198,6 +199,7 @@ export default function WeeklyPlannerPage() {
       schedules: activeDays.map((s) => ({
         day_of_week: s.day_of_week,
         duration_min: typeof s.duration_min === "number" && !isNaN(s.duration_min) ? s.duration_min : (parseFloat(s.duration_min as string) || 90),
+        sport: s.sport || athlete?.sport || "cycling",
         route_id: s.route_id || null,
         notes: s.notes || null,
       })),
@@ -667,6 +669,7 @@ export default function WeeklyPlannerPage() {
                                     id: Math.random().toString(),
                                     day_of_week: idx,
                                     duration_min: 90,
+                                    sport: athlete?.sport ?? "cycling",
                                     route_id: "",
                                     notes: "",
                                   },
@@ -699,6 +702,24 @@ export default function WeeklyPlannerPage() {
                                     {typeof sched.duration_min === "number" && sched.duration_min > 0 && sched.duration_min < 10 && (
                                       <span className="text-[9px] text-warning font-medium leading-none mt-0.5">Unter 10 Min.</span>
                                     )}
+                                  </div>
+                                  <div className="w-36">
+                                    <Select
+                                      value={sched.sport || athlete?.sport || "cycling"}
+                                      onChange={(e) => {
+                                        const val = e.target.value as Sport;
+                                        setSchedules((prev) =>
+                                          prev.map((s) => (s.id === sched.id ? { ...s, sport: val } : s))
+                                        );
+                                      }}
+                                      className="py-1 text-xs"
+                                    >
+                                      <option value="cycling">{t.settings.sports.cycling}</option>
+                                      <option value="running">{t.settings.sports.running}</option>
+                                      <option value="swimming">{t.settings.sports.swimming}</option>
+                                      <option value="cross_country_skiing">{t.settings.sports.cross_country_skiing}</option>
+                                      <option value="weight_training">{t.settings.sports.weight_training}</option>
+                                    </Select>
                                   </div>
                                   <div className="flex-1">
                                     <Select

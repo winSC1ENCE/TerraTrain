@@ -1,12 +1,15 @@
 import uuid
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from terratrain.constants import SPORT_PATTERN
 
 
 class CoachingRequest(BaseModel):
     route_id: uuid.UUID | None = None
     workout_type: str
+    sport: str | None = Field(default=None, pattern=SPORT_PATTERN)
     scheduled_date: date | None = None
     notes: str | None = None
     auto_push: bool = False

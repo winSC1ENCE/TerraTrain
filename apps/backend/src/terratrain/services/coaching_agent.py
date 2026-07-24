@@ -193,15 +193,17 @@ class CoachingAgent:
         athlete: Athlete,
         route: Route | None,
         workout_type: str,
-        scheduled_date: date | None,
-        notes: str | None,
-        auto_push: bool,
+        sport: str | None = None,
+        scheduled_date: date | None = None,
+        notes: str | None = None,
+        auto_push: bool = False,
         provider: str | None = None,
         press_lap: bool = False,
     ) -> AsyncGenerator[dict[str, Any], None]:
         yield {"event": "thinking", "data": "Gathering athlete context..."}
 
         llm_provider = provider or self._settings.resolved_llm_provider
+        active_sport = sport or athlete.sport
 
         # Step 1: assemble context concurrently
         pmc = await self._get_pmc(athlete)
@@ -209,7 +211,7 @@ class CoachingAgent:
 
         yield {"event": "thinking", "data": "Analyzing route terrain..."}
 
-        context = self._build_context(athlete, pmc, route, rag_chunks, workout_type, notes)
+        context = self._build_context(athlete, pmc, route, rag_chunks, workout_type, notes, sport=active_sport)
         system_prompt = self._build_system_prompt(context)
 
         yield {"event": "thinking", "data": "Starting coaching agent loop..."}
@@ -266,7 +268,7 @@ class CoachingAgent:
 
             # Parse + validate the submitted plan
             try:
-                plan_sport = plan_data.get("sport", athlete.sport)
+                plan_sport = plan_data.get("sport", active_sport)
                 candidate = WorkoutPlan(
                     name=plan_data["name"],
                     workout_type=plan_data["workout_type"],
@@ -392,11 +394,12 @@ class CoachingAgent:
         rag_chunks: list[dict],
         workout_type: str,
         notes: str | None,
+        sport: str | None = None,
     ) -> dict:
         context: dict = {
             "athlete": {
                 "name": athlete.name,
-                "sport": athlete.sport,
+                "sport": sport or athlete.sport,
                 "ftp_watts": athlete.ftp_watts,
                 "threshold_pace_s_per_m": athlete.threshold_pace_s_per_m,
                 "css_pace_s_per_100m": athlete.css_pace_s_per_100m,
@@ -699,10 +702,12 @@ When ready, call final_answer with the complete workout plan.
                 msg_copy["tool_calls"] = tool_calls_copy
             formatted_messages.append(msg_copy)
 
+        gemini_tools = [t for t in TOOLS if t["function"]["name"] == "final_answer"]
+
         payload = {
             "model": settings.gemini_chat_model,
             "messages": formatted_messages,
-            "tools": TOOLS,
+            "tools": gemini_tools,
             "temperature": 0.3,
         }
 

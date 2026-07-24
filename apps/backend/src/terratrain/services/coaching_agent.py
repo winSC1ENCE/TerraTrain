@@ -194,6 +194,7 @@ class CoachingAgent:
         route: Route | None,
         workout_type: str,
         sport: str | None = None,
+        aggressiveness: int = 0,
         scheduled_date: date | None = None,
         notes: str | None = None,
         auto_push: bool = False,
@@ -211,7 +212,9 @@ class CoachingAgent:
 
         yield {"event": "thinking", "data": "Analyzing route terrain..."}
 
-        context = self._build_context(athlete, pmc, route, rag_chunks, workout_type, notes, sport=active_sport)
+        context = self._build_context(
+            athlete, pmc, route, rag_chunks, workout_type, notes, sport=active_sport, aggressiveness=aggressiveness
+        )
         system_prompt = self._build_system_prompt(context)
 
         yield {"event": "thinking", "data": "Starting coaching agent loop..."}
@@ -395,6 +398,7 @@ class CoachingAgent:
         workout_type: str,
         notes: str | None,
         sport: str | None = None,
+        aggressiveness: int = 0,
     ) -> dict:
         context: dict = {
             "athlete": {
@@ -409,6 +413,7 @@ class CoachingAgent:
             },
             "pmc": pmc,
             "workout_type": workout_type,
+            "aggressiveness": aggressiveness,
             "notes": notes,
             "rag_context": [c["content"] for c in rag_chunks[:5]],
         }
@@ -538,6 +543,14 @@ app derives the athlete's actual pace/HR target from their own thresholds.
         pmc = ctx["pmc"]
         rag = "\n---\n".join(ctx["rag_context"])
 
+        aggressiveness = ctx.get("aggressiveness", 0)
+        if aggressiveness > 0:
+            agg_guide = f"HIGHER / AGGRESSIVE (+{aggressiveness}): Prescribe higher interval volume, longer work phases, and push target TSS towards upper limits (+15% to +30%)."
+        elif aggressiveness < 0:
+            agg_guide = f"LOWER / CONSERVATIVE ({aggressiveness}): Prescribe conservative interval volume, shorter work phases, and reduce target TSS (-15% to -30%) to prioritize freshness."
+        else:
+            agg_guide = "BALANCED / STANDARD (0): Standard baseline target load and interval prescription."
+
         prompt = f"""You are TerraTrain, an expert {self._sport_label(sport)} coach.
 
 ## Athlete Profile
@@ -551,6 +564,7 @@ Weekly TSS: {pmc["weekly_tss"]}
 
 ## Requested Workout
 Type: {ctx["workout_type"]}
+Training Load Aggressiveness: {agg_guide}
 Notes: {ctx.get("notes") or "none"}
 """
 

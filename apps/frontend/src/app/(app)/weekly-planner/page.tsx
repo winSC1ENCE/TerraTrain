@@ -70,6 +70,8 @@ function getNextMonday() {
   return d.toISOString().split("T")[0];
 }
 
+import { Slider } from "@/components/ui/Slider";
+
 export default function WeeklyPlannerPage() {
   const athlete = useAthlete();
   const t = useT();
@@ -77,6 +79,7 @@ export default function WeeklyPlannerPage() {
   const [startDate, setStartDate] = useState(getNextMonday());
   const [mesocycleType, setMesocycleType] = useState("3-1");
   const [weekType, setWeekType] = useState("load_1");
+  const [aggressiveness, setAggressiveness] = useState<number>(0);
   const [globalNotes, setGlobalNotes] = useState("");
   const [provider, setProvider] = useState("ollama");
   const [pressLap, setPressLap] = useState(false);
@@ -196,6 +199,7 @@ export default function WeeklyPlannerPage() {
       start_date: startDate,
       mesocycle_type: mesocycleType,
       week_type: weekType,
+      aggressiveness: aggressiveness,
       schedules: activeDays.map((s) => ({
         day_of_week: s.day_of_week,
         duration_min: typeof s.duration_min === "number" && !isNaN(s.duration_min) ? s.duration_min : (parseFloat(s.duration_min as string) || 90),
@@ -581,6 +585,13 @@ export default function WeeklyPlannerPage() {
                       <option value="load_3">Belastungswoche 3</option>
                       <option value="recovery">Erholungswoche</option>
                     </Select>
+
+                    <Slider
+                      label="Trainingsbelastung / Aggressivität"
+                      hint="Steuert die Ziel-Intensität/TSS (0 = Ausgewogen / Normal wie bisher, +1/+2 = Intensiver / Mehr Belastung, -1/-2 = Leichter / Konservativ)"
+                      value={aggressiveness}
+                      onChange={setAggressiveness}
+                    />
 
                     <Select
                       label="Modell-Anbieter"

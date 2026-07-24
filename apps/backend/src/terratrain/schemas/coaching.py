@@ -10,6 +10,7 @@ class CoachingRequest(BaseModel):
     route_id: uuid.UUID | None = None
     workout_type: str
     sport: str | None = Field(default=None, pattern=SPORT_PATTERN)
+    aggressiveness: int = Field(default=0, ge=-2, le=2)
     scheduled_date: date | None = None
     notes: str | None = None
     auto_push: bool = False

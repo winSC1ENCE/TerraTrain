@@ -15,12 +15,15 @@ import { StreamPanel } from "@/components/coach/StreamPanel";
 import { WorkoutPlanCard } from "@/components/coach/WorkoutPlanCard";
 import { WorkoutTypeSelector } from "@/components/coach/WorkoutTypeSelector";
 
+import { Slider } from "@/components/ui/Slider";
+
 export default function CoachPage() {
   const athlete = useAthlete();
   const t = useT();
   const { events, plan, error, isStreaming, start, stop } = useCoachStream();
 
   const [sport, setSport] = useState<Sport>(athlete?.sport ?? "cycling");
+  const [aggressiveness, setAggressiveness] = useState<number>(0);
   const [workoutType, setWorkoutType] = useState("threshold");
   const [scheduledDate, setScheduledDate] = useState("");
   const [routeId, setRouteId] = useState("");
@@ -58,6 +61,7 @@ export default function CoachPage() {
     start({
       workout_type: workoutType,
       sport: sport,
+      aggressiveness: aggressiveness,
       scheduled_date: scheduledDate || undefined,
       route_id: routeId || undefined,
       notes: notes || undefined,
@@ -125,6 +129,13 @@ export default function CoachPage() {
                   ))}
                 </Select>
               </div>
+
+              <Slider
+                label="Trainingsbelastung / Aggressivität"
+                hint="Steuert die Ziel-Intensität/TSS (0 = Ausgewogen / Normal wie bisher, +1/+2 = Intensiver / Mehr Belastung, -1/-2 = Leichter / Konservativ)"
+                value={aggressiveness}
+                onChange={setAggressiveness}
+              />
 
               <Textarea
                 label={`${t.coach.notes} (${t.common.optional})`}

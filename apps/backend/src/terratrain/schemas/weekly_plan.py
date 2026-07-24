@@ -20,6 +20,7 @@ class WeeklyPlanCreateRequest(BaseModel):
     mesocycle_type: str  # "3-1" or "2-1"
     week_type: str  # "load_1", "load_2", "load_3", "recovery"
     schedules: list[DailyScheduleInput]
+    aggressiveness: int = Field(default=0, ge=-2, le=2)
     notes: str | None = None
     provider: str | None = None
     press_lap: bool = False

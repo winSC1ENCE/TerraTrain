@@ -267,6 +267,7 @@ class WeeklyCoachingAgent(CoachingAgent):
             "history": det_result["history"],
             "week_type": body.week_type,
             "mesocycle_type": body.mesocycle_type,
+            "aggressiveness": body.aggressiveness,
             "notes": body.notes,
             "schedules": schedules_context,
         }
@@ -534,6 +535,14 @@ class WeeklyCoachingAgent(CoachingAgent):
         example_lines.insert(1, '      "day_of_week": 1,')
         daily_workout_example = "\n".join(example_lines)
 
+        aggressiveness = ctx.get("aggressiveness", 0)
+        if aggressiveness > 0:
+            agg_guide = f"HIGHER / AGGRESSIVE (+{aggressiveness}): Increase overall weekly TSS targets (+15% to +30%), prescribe higher interval volumes and push progressive overloading aggressively."
+        elif aggressiveness < 0:
+            agg_guide = f"LOWER / CONSERVATIVE ({aggressiveness}): Reduce overall weekly TSS targets (-15% to -30%), keep workout durations/intensities conservative to prioritize recovery and freshness."
+        else:
+            agg_guide = "BALANCED / STANDARD (0): Standard baseline weekly periodization TSS targets matching current mesocycle recommendations."
+
         prompt = f"""You are TerraTrain, an expert {self._sport_label(sport)} coach.
 
 ## Athlete Profile
@@ -550,6 +559,7 @@ TSB (form): {pmc["tsb"]}
 ## Periodisation Goal for the Upcoming Week
 Mesocycle Type: {mesocycle_type}
 Week Type: {week_type}
+Training Load Aggressiveness: {agg_guide}
 
 ## Athlete's Day-by-Day Request for the Week
 {schedule_text}

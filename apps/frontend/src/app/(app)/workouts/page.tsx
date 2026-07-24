@@ -9,11 +9,12 @@ import { useT } from "@/lib/i18n";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn, formatDate, formatDuration } from "@/lib/utils";
 import { PhaseBar } from "@/components/coach/PhaseBar";
-import type { WorkoutPhase } from "@/lib/types";
+import type { Sport, WorkoutPhase } from "@/lib/types";
 
 const statusVariant: Record<string, "default" | "info" | "success" | "accent"> = {
   draft: "default",
@@ -33,10 +34,12 @@ export default function WorkoutsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editStructuredText, setEditStructuredText] = useState("");
+  const [editSport, setEditSport] = useState<Sport>("cycling");
+  const [editPressLap, setEditPressLap] = useState(false);
 
   const { data: workouts } = useQuery({
     queryKey: ["workouts", athlete?.id],
-    queryFn: () => api.workouts.list(athlete!.id),
+    queryFn: () => api.workouts.list(),
     enabled: !!athlete,
   });
 
@@ -47,8 +50,19 @@ export default function WorkoutsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, name, structured_text }: { id: string; name: string; structured_text: string }) =>
-      api.workouts.update(id, { name, structured_text }),
+    mutationFn: ({
+      id,
+      name,
+      structured_text,
+      sport,
+      press_lap,
+    }: {
+      id: string;
+      name: string;
+      structured_text: string;
+      sport: Sport;
+      press_lap: boolean;
+    }) => api.workouts.update(id, { name, structured_text, sport, press_lap }),
     onSuccess: () => {
       setEditingId(null);
       void queryClient.invalidateQueries({ queryKey: ["workouts", athlete?.id] });
@@ -103,6 +117,21 @@ export default function WorkoutsPage() {
                     </div>
 
                     <div className="space-y-1">
+                      <label className="text-xs font-semibold text-text-muted">{t.settings.sport}</label>
+                      <select
+                        value={editSport}
+                        onChange={(e) => setEditSport(e.target.value as Sport)}
+                        className="w-full px-3 py-2 text-sm bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        <option value="cycling">{t.settings.sports.cycling}</option>
+                        <option value="running">{t.settings.sports.running}</option>
+                        <option value="swimming">{t.settings.sports.swimming}</option>
+                        <option value="cross_country_skiing">{t.settings.sports.cross_country_skiing}</option>
+                        <option value="weight_training">{t.settings.sports.weight_training}</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
                       <label className="text-xs font-semibold text-text-muted">Intervals.icu Schritte</label>
                       <textarea
                         value={editStructuredText}
@@ -111,6 +140,13 @@ export default function WorkoutsPage() {
                         className="w-full px-3 py-2 text-sm font-mono bg-bg border border-border rounded-md text-text focus:outline-none focus:ring-1 focus:ring-accent"
                       />
                     </div>
+
+                    <Checkbox
+                      label={t.workouts.pressLap}
+                      hint={t.workouts.pressLapHint}
+                      checked={editPressLap}
+                      onChange={setEditPressLap}
+                    />
 
                     <div className="flex gap-2 justify-end pt-2">
                       <Button
@@ -128,6 +164,8 @@ export default function WorkoutsPage() {
                             id: w.id,
                             name: editName,
                             structured_text: editStructuredText,
+                            sport: editSport,
+                            press_lap: editPressLap,
                           })
                         }
                       >
@@ -238,6 +276,8 @@ export default function WorkoutsPage() {
                         setEditingId(w.id);
                         setEditName(w.name);
                         setEditStructuredText(w.structured_text ?? "");
+                        setEditSport(w.sport);
+                        setEditPressLap(w.press_lap);
                       }}
                     >
                       <Pencil className="h-3.5 w-3.5" />

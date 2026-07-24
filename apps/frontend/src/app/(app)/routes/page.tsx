@@ -76,9 +76,8 @@ export default function RoutesPage() {
   }, [selectedRoute]);
 
   const { data: routes } = useQuery({
-    queryKey: ["routes", athlete?.id],
-    queryFn: () => api.routes.list(athlete!.id),
-    enabled: !!athlete,
+    queryKey: ["routes"],
+    queryFn: () => api.routes.list(),
   });
 
   if (!athlete) return null;
@@ -101,7 +100,7 @@ export default function RoutesPage() {
     setIsSaving(true);
     try {
       await api.routes.update(id, { name: editName.trim() });
-      void queryClient.invalidateQueries({ queryKey: ["routes", athlete.id] });
+      void queryClient.invalidateQueries({ queryKey: ["routes"] });
       if (selectedRoute?.id === id) {
         setSelectedRoute((prev) => (prev ? { ...prev, name: editName.trim() } : null));
       }
@@ -118,7 +117,7 @@ export default function RoutesPage() {
     if (!window.confirm("Möchtest du diese Route wirklich löschen?")) return;
     try {
       await api.routes.delete(id);
-      void queryClient.invalidateQueries({ queryKey: ["routes", athlete.id] });
+      void queryClient.invalidateQueries({ queryKey: ["routes"] });
       if (selectedRoute?.id === id) {
         setSelectedRoute(null);
       }
@@ -129,12 +128,11 @@ export default function RoutesPage() {
 
   async function handleUpload(file: File): Promise<string> {
     const form = new FormData();
-    form.append("athlete_id", athlete!.id);
     form.append("name", file.name.replace(/\.gpx$/i, "").replace(/[_-]/g, " "));
     form.append("sport", athlete!.sport);
     form.append("gpx_file", file);
     const route = await api.routes.upload(form);
-    void queryClient.invalidateQueries({ queryKey: ["routes", athlete!.id] });
+    void queryClient.invalidateQueries({ queryKey: ["routes"] });
     return `${(route.distance_m / 1000).toFixed(1)} km · ${Math.round(route.elevation_gain_m)} hm`;
   }
 

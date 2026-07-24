@@ -7,12 +7,13 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from terratrain.config import get_settings
+from terratrain.constants import Sport
 from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.route import Route
 from terratrain.db.models.weekly_plan import WeeklyPlan
 from terratrain.db.models.workout import Workout
 from terratrain.schemas.weekly_plan import WeeklyPlanCreateRequest
-from terratrain.schemas.workout import WorkoutPhase, WorkoutPlan
+from terratrain.schemas.workout import StrengthExercise, WorkoutPhase, WorkoutPlan
 from terratrain.services.coaching_agent import CoachingAgent, OllamaError
 from terratrain.services.fitness_service import get_fitness
 from terratrain.services.mesocycle_detector import MesocycleDetector
@@ -44,7 +45,7 @@ WEEKLY_PLAN_TOOL_SCHEMA = {
                     },
                     "sport": {
                         "type": "string",
-                        "enum": ["cycling", "running", "triathlon"],
+                        "enum": [s.value for s in Sport],
                         "description": "The sport of the workout.",
                     },
                     "target_tss": {
@@ -62,7 +63,10 @@ WEEKLY_PLAN_TOOL_SCHEMA = {
                     },
                     "phases": {
                         "type": "array",
-                        "description": "Step-by-step phases of the workout.",
+                        "description": (
+                            "Endurance sports only (cycling/running/swimming/"
+                            "cross_country_skiing) — step-by-step phases of the workout."
+                        ),
                         "items": {
                             "type": "object",
                             "properties": {
@@ -71,11 +75,11 @@ WEEKLY_PLAN_TOOL_SCHEMA = {
                                 "zone": {
                                     "type": "string",
                                     "enum": ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7"],
-                                    "description": "The target Coggan power zone.",
+                                    "description": "The target relative-intensity zone (Z1-Z5 for non-cycling sports).",
                                 },
                                 "target_power_pct": {
                                     "type": "number",
-                                    "description": "Exact target power as percentage of FTP (e.g. 65). Must be a number, not a string.",
+                                    "description": "Cycling only — exact target power as percentage of FTP (e.g. 65). Must be a number, not a string.",
                                 },
                                 "target_hr_zone": {
                                     "type": "string",
@@ -91,8 +95,24 @@ WEEKLY_PLAN_TOOL_SCHEMA = {
                             "required": ["name", "duration_min", "zone"],
                         },
                     },
+                    "exercises": {
+                        "type": "array",
+                        "description": "weight_training only — one entry per exercise.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "sets": {"type": "integer"},
+                                "reps": {"type": "integer"},
+                                "rpe": {"type": "number", "description": "1-10 scale, 10 = failure."},
+                                "rest_seconds": {"type": "integer"},
+                                "description": {"type": "string"},
+                            },
+                            "required": ["name", "sets", "reps"],
+                        },
+                    },
                 },
-                "required": ["day_of_week", "name", "workout_type", "sport", "target_tss", "rationale", "phases"],
+                "required": ["day_of_week", "name", "workout_type", "sport", "target_tss", "rationale"],
             },
         },
     },
@@ -132,6 +152,42 @@ WEEK_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "calculate_running_pace_zones",
+            "description": "Return running pace zone boundaries relative to threshold pace.",
+            "parameters": {
+                "type": "object",
+                "properties": {"threshold_pace_s_per_m": {"type": "number"}},
+                "required": ["threshold_pace_s_per_m"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_swim_css_zones",
+            "description": "Return swim pace zone boundaries relative to Critical Swim Speed.",
+            "parameters": {
+                "type": "object",
+                "properties": {"css_pace_s_per_100m": {"type": "number"}},
+                "required": ["css_pace_s_per_100m"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_hr_zones",
+            "description": "Return HR zone boundaries relative to LTHR (used for cross_country_skiing).",
+            "parameters": {
+                "type": "object",
+                "properties": {"lthr": {"type": "integer"}},
+                "required": ["lthr"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "estimate_tss",
             "description": "Calculate estimated TSS from duration and intensity factor.",
             "parameters": {
@@ -161,14 +217,9 @@ from terratrain.services.workout_normalizer import normalize_workout_duration
 class WeeklyCoachingAgent(CoachingAgent):
 
     async def generate_week(
-        self, body: WeeklyPlanCreateRequest
+        self, athlete: Athlete, body: WeeklyPlanCreateRequest
     ) -> AsyncGenerator[dict[str, Any], None]:
         yield {"event": "thinking", "data": "Gathering athlete context..."}
-
-        athlete = await self._session.get(Athlete, body.athlete_id)
-        if not athlete:
-            yield {"event": "error", "data": "Athlete not found"}
-            return
 
         # 1. Fetch PMC and history
         pmc = await self._get_pmc(athlete)
@@ -206,6 +257,8 @@ class WeeklyCoachingAgent(CoachingAgent):
                 "name": athlete.name,
                 "sport": athlete.sport,
                 "ftp_watts": athlete.ftp_watts,
+                "threshold_pace_s_per_m": athlete.threshold_pace_s_per_m,
+                "css_pace_s_per_100m": athlete.css_pace_s_per_100m,
                 "weight_kg": athlete.weight_kg,
                 "lthr": athlete.lthr,
             },
@@ -269,8 +322,9 @@ class WeeklyCoachingAgent(CoachingAgent):
                         name=d_spec["name"],
                         workout_type=d_spec["workout_type"],
                         sport=d_spec.get("sport", athlete.sport),
-                        phases=[WorkoutPhase(**p) for p in d_spec["phases"]],
-                        target_tss=d_spec["target_tss"],
+                        phases=[WorkoutPhase(**p) for p in d_spec.get("phases", [])],
+                        exercises=[StrengthExercise(**e) for e in d_spec.get("exercises", [])],
+                        target_tss=d_spec.get("target_tss", 0),
                         rationale=d_spec["rationale"],
                         coach_notes=d_spec.get("coach_notes", ""),
                     )
@@ -357,8 +411,9 @@ class WeeklyCoachingAgent(CoachingAgent):
                 name=d_spec["name"],
                 workout_type=d_spec["workout_type"],
                 sport=d_spec.get("sport", athlete.sport),
-                phases=[WorkoutPhase(**p) for p in d_spec["phases"]],
-                target_tss=d_spec["target_tss"],
+                phases=[WorkoutPhase(**p) for p in d_spec.get("phases", [])],
+                exercises=[StrengthExercise(**e) for e in d_spec.get("exercises", [])],
+                target_tss=d_spec.get("target_tss", 0),
                 rationale=d_spec["rationale"],
                 coach_notes=d_spec.get("coach_notes", ""),
             )
@@ -377,11 +432,18 @@ class WeeklyCoachingAgent(CoachingAgent):
             target_dur = float(matched_sched.duration_min) if matched_sched and matched_sched.duration_min else 0.0
             matched_route_id = matched_sched.route_id if matched_sched else None
 
-            if target_dur > 0:
+            if target_dur > 0 and candidate.sport != Sport.WEIGHT_TRAINING:
                 candidate = normalize_workout_duration(candidate, target_dur)
 
-            structured_text = WorkoutFormatter.to_intervals_icu(candidate)
-            total_min = sum(p.duration_min * max(1, p.repeat) for p in candidate.phases)
+            structured_text = WorkoutFormatter.to_intervals_icu(candidate, athlete=athlete)
+            structured_text = WorkoutFormatter.apply_press_lap(structured_text, body.press_lap)
+
+            # weight_training candidates have no `phases` (they use `exercises`,
+            # which carry no per-set duration estimate) — duration is unknown.
+            duration_seconds = None
+            if candidate.sport != Sport.WEIGHT_TRAINING:
+                total_min = sum(p.duration_min * max(1, p.repeat) for p in candidate.phases)
+                duration_seconds = int(total_min * 60)
 
             workout_date = body.start_date + timedelta(days=d_spec["day_of_week"])
             workout = Workout(
@@ -392,9 +454,10 @@ class WeeklyCoachingAgent(CoachingAgent):
                 sport=candidate.sport,
                 workout_type=candidate.workout_type,
                 scheduled_date=workout_date,
-                duration_seconds=int(total_min * 60),
+                duration_seconds=duration_seconds,
                 target_tss=candidate.target_tss,
                 structured_text=structured_text,
+                press_lap=body.press_lap,
                 llm_plan=candidate.model_dump(),
                 llm_reasoning=candidate.rationale,
                 coach_notes=candidate.coach_notes,
@@ -458,14 +521,17 @@ class WeeklyCoachingAgent(CoachingAgent):
             f"  - {h['week_label']}: {h['tss']:.0f} TSS" for h in history
         )
 
-        prompt = f"""You are TerraTrain, an expert endurance coach specializing in cycling and running.
+        sport = athlete["sport"]
+        # Inject a "day_of_week" line into the shared single-workout example
+        # (daily_workouts items need it; the shared block doesn't include it).
+        example_lines = self._sport_example_block(sport).split("\n")
+        example_lines.insert(1, '      "day_of_week": 1,')
+        daily_workout_example = "\n".join(example_lines)
+
+        prompt = f"""You are TerraTrain, an expert {self._sport_label(sport)} coach.
 
 ## Athlete Profile
-Name: {athlete["name"]}
-Sport: {athlete["sport"]}
-FTP: {athlete["ftp_watts"] or "unknown"} W
-Weight: {athlete["weight_kg"] or "unknown"} kg
-LTHR: {athlete["lthr"] or "unknown"} bpm
+{self._athlete_profile_block(athlete)}
 
 ## Current Training Load
 CTL (fitness): {pmc["ctl"]}
@@ -503,35 +569,17 @@ For days not requested by the athlete, do NOT output any workouts for that day (
    - Descents and post-summit sections MUST be assigned to Z1/Z2 recovery or cooldown.
 
 4. **Hard Rules for every individual workout**:
-   - STRICT DURATION MATCHING: The total duration of all phases in a workout MUST strictly equal the requested duration for that day (e.g. if 105 min is requested, sum of all phase durations MUST equal 105 min).
-   - REPEAT CALCULATION MATH: Remember that a set with `repeat: N` multiplies the duration! For example, 3 repeats of (8 min interval + 8 min recovery) takes 3 * (8 + 8) = 48 minutes total, NOT 16 minutes. Calculate repeat set totals carefully when fitting into the day's target duration!
-   - First phase of each workout = warmup: at most 75% FTP, at least 10 min
-   - Last phase of each workout = cooldown: at most 75% FTP
-   - `target_power_pct` must be a NUMBER, never a zone label
-   - `target_hr_zone` only as numeric bpm range like "130-145" — NEVER "Z2"
-   - Use `repeat` for interval sets
+   - STRICT DURATION MATCHING (endurance sports only): the total duration of all phases in a workout MUST strictly equal the requested duration for that day (e.g. if 105 min is requested, sum of all phase durations MUST equal 105 min). Not applicable to weight_training, which has no continuous duration.
+{self._sport_hard_rules_block(sport)}
 
 ## IMPORTANT: CALL final_answer IMMEDIATELY
 Do not write long text introductions. You must formulate the weekly plan and call the `final_answer` tool with the structured plan.
 
-Here is an example structure of the arguments for calling `final_answer`:
+Here is an example structure of the arguments for calling `final_answer` (one day shown; repeat the `daily_workouts` entry shape for every requested day, adding `"day_of_week"` to each):
 {{
   "coach_rationale": "Weekly periodisation rationale explaining the block structure...",
   "daily_workouts": [
-    {{
-      "day_of_week": 1,
-      "name": "Tempo Endurance",
-      "workout_type": "endurance",
-      "sport": "cycling",
-      "target_tss": 75,
-      "rationale": "Controlled aerobic development.",
-      "coach_notes": "Stay focused on cadence.",
-      "phases": [
-        {{"name": "Warmup", "duration_min": 15, "zone": "Z2", "target_power_pct": 65, "repeat": 1}},
-        {{"name": "Tempo Block", "duration_min": 40, "zone": "Z3", "target_power_pct": 82, "repeat": 1}},
-        {{"name": "Cooldown", "duration_min": 10, "zone": "Z1", "target_power_pct": 55, "repeat": 1}}
-      ]
-    }}
+    {daily_workout_example}
   ]
 }}
 """

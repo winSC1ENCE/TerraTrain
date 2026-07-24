@@ -53,6 +53,32 @@ def test_calculate_zones_coggan_classic():
     assert zones["z4"]["max_pct"] == 100
 
 
+def test_running_pace_zones_z4_brackets_threshold():
+    """Z4 (Threshold) should bracket the threshold pace itself (100%)."""
+    zones = TrainingAnalytics.calculate_running_pace_zones(threshold_pace_s_per_m=0.24)
+    z4 = zones["z4"]
+    assert z4["min_pace_s_per_m"] < 0.24 < z4["max_pace_s_per_m"]
+
+
+def test_running_pace_zones_recovery_slower_than_vo2max():
+    zones = TrainingAnalytics.calculate_running_pace_zones(threshold_pace_s_per_m=0.24)
+    # Recovery is a SLOWER pace (higher seconds/meter) than VO2max.
+    assert zones["z1"]["min_pace_s_per_m"] > zones["z5"]["max_pace_s_per_m"]
+    assert zones["z1"]["max_pace_s_per_m"] is None  # unbounded slow end
+
+
+def test_swim_css_zones_z3_brackets_css():
+    zones = TrainingAnalytics.calculate_swim_css_zones(css_pace_s_per_100m=90.0)
+    z3 = zones["z3"]
+    assert z3["min_pace_s_per_100m"] <= 90.0 <= z3["max_pace_s_per_100m"]
+
+
+def test_hr_zones_scale_with_lthr():
+    zones = TrainingAnalytics.calculate_hr_zones(lthr=165)
+    assert zones["z4"]["min_bpm"] < 165 <= zones["z5"]["min_bpm"]
+    assert zones["z1"]["max_bpm"] < zones["z5"]["min_bpm"]
+
+
 def test_pmc_series_empty():
     result = TrainingAnalytics.compute_pmc_series([])
     assert result["series"] == []

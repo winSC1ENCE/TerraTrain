@@ -9,6 +9,7 @@ import { useT } from "@/lib/i18n";
 import type { WorkoutPhase } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { StreamPanel } from "@/components/coach/StreamPanel";
 import { WorkoutPlanCard } from "@/components/coach/WorkoutPlanCard";
@@ -25,10 +26,11 @@ export default function CoachPage() {
   const [notes, setNotes] = useState("");
   const [phases, setPhases] = useState<WorkoutPhase[] | undefined>();
   const [provider, setProvider] = useState("ollama");
+  const [pressLap, setPressLap] = useState(false);
 
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
-    queryFn: () => api.routes.list(athlete!.id),
+    queryFn: () => api.routes.list(),
     enabled: !!athlete,
   });
 
@@ -53,12 +55,12 @@ export default function CoachPage() {
     e.preventDefault();
     if (!athlete) return;
     start({
-      athlete_id: athlete.id,
       workout_type: workoutType,
       scheduled_date: scheduledDate || undefined,
       route_id: routeId || undefined,
       notes: notes || undefined,
       provider: provider,
+      press_lap: pressLap,
     });
   }
 
@@ -117,6 +119,13 @@ export default function CoachPage() {
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+              />
+
+              <Checkbox
+                label={t.workouts.pressLap}
+                hint={t.workouts.pressLapHint}
+                checked={pressLap}
+                onChange={setPressLap}
               />
 
               <div className="flex gap-2">

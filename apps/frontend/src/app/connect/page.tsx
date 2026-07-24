@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bike, CheckCircle2, Footprints, Medal } from "lucide-react";
+import { Bike, CheckCircle2, Dumbbell, Footprints, Snowflake, Waves } from "lucide-react";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 import { useAthleteStore } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/Button";
@@ -18,9 +19,19 @@ export default function ConnectPage() {
   const router = useRouter();
   const t = useT();
   const { status, setAthlete, markSynced } = useAthleteStore();
+  const { status: authStatus, bootstrap: bootstrapAuth } = useAuthStore();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // Onboarding requires an authenticated session (no self-registration).
+  useEffect(() => {
+    if (mounted && authStatus === "idle") void bootstrapAuth();
+  }, [mounted, authStatus, bootstrapAuth]);
+
+  useEffect(() => {
+    if (authStatus === "anonymous") router.replace("/login");
+  }, [authStatus, router]);
 
   const [step, setStep] = useState<Step>("form");
   const [intervalsId, setIntervalsId] = useState("");
@@ -34,7 +45,7 @@ export default function ConnectPage() {
 
   // Already connected? Go to dashboard.
   useEffect(() => {
-    if (mounted && status === "ready") router.replace("/");
+    if (mounted && status === "ready") router.replace("/dashboard");
   }, [mounted, status, router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -57,8 +68,8 @@ export default function ConnectPage() {
     }
 
     try {
-      const sync = await api.athletes.sync(created.id);
-      const fresh = await api.athletes.get(created.id);
+      const sync = await api.athletes.sync();
+      const fresh = await api.athletes.getMe();
       setLocalAthlete(fresh);
       setSyncResult(sync);
       setAthlete(fresh);
@@ -75,7 +86,7 @@ export default function ConnectPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <img src="/terratrain_logo.svg" alt="TerraTrain Logo" className="mx-auto mb-4 h-16 w-auto" />
+          <img src="/brand/mark.svg" alt="TerraTrain Logo" className="mx-auto mb-4 h-16 w-auto" />
           <h1 className="text-xl font-bold tracking-tight">{t.connect.title}</h1>
           <p className="mt-1 text-sm text-text-muted">{t.connect.subtitle}</p>
         </div>
@@ -98,7 +109,17 @@ export default function ConnectPage() {
                     options={[
                       { value: "cycling", label: t.settings.sports.cycling, icon: Bike },
                       { value: "running", label: t.settings.sports.running, icon: Footprints },
-                      { value: "triathlon", label: t.settings.sports.triathlon, icon: Medal },
+                      { value: "swimming", label: t.settings.sports.swimming, icon: Waves },
+                      {
+                        value: "cross_country_skiing",
+                        label: t.settings.sports.cross_country_skiing,
+                        icon: Snowflake,
+                      },
+                      {
+                        value: "weight_training",
+                        label: t.settings.sports.weight_training,
+                        icon: Dumbbell,
+                      },
                     ]}
                     value={sport}
                     onChange={setSport}
@@ -158,7 +179,7 @@ export default function ConnectPage() {
                   <p className="mt-3 text-xs text-warning">{t.connect.syncFailed}</p>
                 )}
 
-                <Button className="mt-5 w-full" onClick={() => router.replace("/")}>
+                <Button className="mt-5 w-full" onClick={() => router.replace("/dashboard")}>
                   {t.connect.goToDashboard}
                 </Button>
               </div>

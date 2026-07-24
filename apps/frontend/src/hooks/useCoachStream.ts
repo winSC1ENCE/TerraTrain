@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, csrfHeaders } from "@/lib/api";
 import type { CoachPlan, CoachingRequest } from "@/lib/types";
 
 export interface CoachEvent {
@@ -74,7 +74,8 @@ export function useCoachStream() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/coaching/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify(request),
         signal: controller.signal,
       });

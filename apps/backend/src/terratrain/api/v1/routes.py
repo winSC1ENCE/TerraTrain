@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from terratrain.api.deps import get_session
+from terratrain.api.deps import get_current_athlete, get_session
 from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.route import Route
 from terratrain.schemas.route import RouteResponse, RouteUpdateRequest
@@ -17,22 +17,18 @@ router = APIRouter()
 
 @router.post("/routes/upload", response_model=RouteResponse, status_code=status.HTTP_201_CREATED)
 async def upload_route(
-    athlete_id: uuid.UUID = Form(...),
     name: str = Form(...),
     sport: str = Form(default="cycling"),
     surface_type: str | None = Form(default=None),
     gpx_file: UploadFile = File(...),
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> Route:
-    athlete = await session.get(Athlete, athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
-
     gpx_content = await gpx_file.read()
     analysis = GpxAnalyzer.analyze(gpx_content.decode("utf-8"))
 
     route = Route(
-        athlete_id=athlete_id,
+        athlete_id=athlete.id,
         name=name,
         sport=sport,
         gpx_data=gpx_content.decode("utf-8"),
@@ -57,23 +53,30 @@ def _ensure_track_points(route: Route) -> Route:
     return route
 
 
+async def _get_owned_route(route_id: uuid.UUID, athlete: Athlete, session: AsyncSession) -> Route:
+    route = await session.get(Route, route_id)
+    if not route or route.athlete_id != athlete.id:
+        # 404 (not 403) so a foreign id doesn't confirm the resource exists.
+        raise HTTPException(status_code=404, detail="Route not found")
+    return route
+
+
 @router.get("/routes/{route_id}", response_model=RouteResponse)
 async def get_route(
     route_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> Route:
-    route = await session.get(Route, route_id)
-    if not route:
-        raise HTTPException(status_code=404, detail="Route not found")
+    route = await _get_owned_route(route_id, athlete, session)
     return _ensure_track_points(route)
 
 
-@router.get("/athletes/{athlete_id}/routes", response_model=list[RouteResponse])
+@router.get("/routes", response_model=list[RouteResponse])
 async def list_routes(
-    athlete_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> list[Route]:
-    result = await session.execute(select(Route).where(Route.athlete_id == athlete_id))
+    result = await session.execute(select(Route).where(Route.athlete_id == athlete.id))
     routes = list(result.scalars().all())
     return [_ensure_track_points(r) for r in routes]
 
@@ -81,11 +84,10 @@ async def list_routes(
 @router.delete("/routes/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_route(
     route_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    route = await session.get(Route, route_id)
-    if not route:
-        raise HTTPException(status_code=404, detail="Route not found")
+    route = await _get_owned_route(route_id, athlete, session)
     await session.delete(route)
     await session.commit()
 
@@ -94,11 +96,10 @@ async def delete_route(
 async def update_route(
     route_id: uuid.UUID,
     body: RouteUpdateRequest,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> Route:
-    route = await session.get(Route, route_id)
-    if not route:
-        raise HTTPException(status_code=404, detail="Route not found")
+    route = await _get_owned_route(route_id, athlete, session)
     route.name = body.name
     await session.commit()
     await session.refresh(route)

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Date, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,7 @@ class Workout(Base, TimestampMixin):
     intervals_workout_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # cycling|running|swimming|cross_country_skiing|weight_training (see constants.Sport)
     sport: Mapped[str] = mapped_column(String(32), nullable=False)
     workout_type: Mapped[str] = mapped_column(String(64), nullable=False)
     # endurance | tempo | threshold | vo2max | race_simulation | recovery
@@ -30,6 +31,10 @@ class Workout(Base, TimestampMixin):
     scheduled_date: Mapped[object] = mapped_column(Date, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     target_tss: Mapped[float | None] = mapped_column(nullable=True)
+
+    # When true, "- Press lap" is prepended as the first line of structured_text
+    # so the athlete's device prompts a manual lap press before the workout starts.
+    press_lap: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     structured_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_plan: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

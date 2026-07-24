@@ -17,11 +17,11 @@ const statusVariant: Record<string, "default" | "info" | "success" | "accent"> =
   completed: "accent",
 };
 
-export function RecentWorkouts({ athleteId }: { athleteId: string }) {
+export function RecentWorkouts() {
   const t = useT();
   const { data: workouts } = useQuery({
-    queryKey: ["workouts", athleteId],
-    queryFn: () => api.workouts.list(athleteId),
+    queryKey: ["workouts"],
+    queryFn: () => api.workouts.list(),
   });
 
   return (

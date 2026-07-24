@@ -14,7 +14,7 @@ import { RecentWorkouts } from "@/components/dashboard/RecentWorkouts";
 export default function DashboardPage() {
   const athlete = useAthlete();
   const t = useT();
-  const { data: fitness, isLoading } = useFitness(athlete?.id);
+  const { data: fitness, isLoading } = useFitness();
 
   if (!athlete) return null;
 
@@ -80,7 +80,7 @@ export default function DashboardPage() {
         </CardBody>
       </Card>
 
-      <RecentWorkouts athleteId={athlete.id} />
+      <RecentWorkouts />
     </div>
   );
 }

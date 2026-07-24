@@ -1,6 +1,6 @@
 import json
-from datetime import date
 import uuid
+from datetime import date
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from terratrain.api.deps import get_session
+from terratrain.api.deps import get_current_athlete, get_session
 from terratrain.db.models.athlete import Athlete
 from terratrain.db.models.weekly_plan import WeeklyPlan
 from terratrain.schemas.weekly_plan import WeeklyPlanCreateRequest, WeeklyPlanResponse
@@ -21,31 +21,42 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
-@router.get("/athletes/{athlete_id}/weekly-plans", response_model=list[WeeklyPlanResponse])
+async def _get_owned_plan(
+    plan_id: uuid.UUID, athlete: Athlete, session: AsyncSession
+) -> WeeklyPlan:
+    result = await session.execute(
+        select(WeeklyPlan)
+        .options(selectinload(WeeklyPlan.workouts))
+        .where(WeeklyPlan.id == plan_id)
+    )
+    plan = result.scalar_one_or_none()
+    if not plan or plan.athlete_id != athlete.id:
+        # 404 (not 403) so a foreign id doesn't confirm the resource exists.
+        raise HTTPException(status_code=404, detail="Weekly plan not found")
+    return plan
+
+
+@router.get("/weekly-plans", response_model=list[WeeklyPlanResponse])
 async def list_weekly_plans(
-    athlete_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> list[WeeklyPlan]:
     result = await session.execute(
         select(WeeklyPlan)
         .options(selectinload(WeeklyPlan.workouts))
-        .where(WeeklyPlan.athlete_id == athlete_id)
+        .where(WeeklyPlan.athlete_id == athlete.id)
         .order_by(WeeklyPlan.start_date.desc())
     )
     return list(result.scalars().all())
 
 
-@router.get("/athletes/{athlete_id}/weekly-plans/detect")
+@router.get("/weekly-plans/detect")
 async def detect_mesocycle(
-    athlete_id: uuid.UUID,
     start_date: date,
     mesocycle_type: str,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    athlete = await session.get(Athlete, athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
-
     return await MesocycleDetector.get_tss_history_and_recommendation(
         athlete=athlete,
         session=session,
@@ -57,16 +68,13 @@ async def detect_mesocycle(
 @router.post("/weekly-plans/generate")
 async def generate_weekly_plan(
     body: WeeklyPlanCreateRequest,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    athlete = await session.get(Athlete, body.athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
-
     agent = WeeklyCoachingAgent(session=session)
 
     async def event_stream() -> object:
-        async for event in agent.generate_week(body):
+        async for event in agent.generate_week(athlete, body):
             yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
 
     return StreamingResponse(
@@ -82,27 +90,19 @@ async def generate_weekly_plan(
 @router.get("/weekly-plans/{plan_id}", response_model=WeeklyPlanResponse)
 async def get_weekly_plan(
     plan_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> WeeklyPlan:
-    result = await session.execute(
-        select(WeeklyPlan)
-        .options(selectinload(WeeklyPlan.workouts))
-        .where(WeeklyPlan.id == plan_id)
-    )
-    plan = result.scalar_one_or_none()
-    if not plan:
-        raise HTTPException(status_code=404, detail="Weekly plan not found")
-    return plan
+    return await _get_owned_plan(plan_id, athlete, session)
 
 
 @router.delete("/weekly-plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_weekly_plan(
     plan_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    plan = await session.get(WeeklyPlan, plan_id)
-    if not plan:
-        raise HTTPException(status_code=404, detail="Weekly plan not found")
+    plan = await _get_owned_plan(plan_id, athlete, session)
     await session.delete(plan)
     await session.commit()
 
@@ -110,19 +110,11 @@ async def delete_weekly_plan(
 @router.post("/weekly-plans/{plan_id}/push")
 async def push_weekly_plan(
     plan_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    result = await session.execute(
-        select(WeeklyPlan)
-        .options(selectinload(WeeklyPlan.workouts))
-        .where(WeeklyPlan.id == plan_id)
-    )
-    plan = result.scalar_one_or_none()
-    if not plan:
-        raise HTTPException(status_code=404, detail="Weekly plan not found")
-
-    athlete = await session.get(Athlete, plan.athlete_id)
-    if not athlete or not athlete.intervals_api_key_encrypted:
+    plan = await _get_owned_plan(plan_id, athlete, session)
+    if not athlete.intervals_api_key_encrypted:
         raise HTTPException(status_code=400, detail="Athlete has no Intervals.icu API key")
 
     client = IntervalsClient.from_athlete(athlete)

@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { Athlete } from "@/lib/types";
 
 export type Language = "de" | "en";
@@ -23,7 +23,7 @@ interface AthleteStore {
 
 export const useAthleteStore = create<AthleteStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       athlete: null,
       status: "idle",
       lastSync: null,
@@ -32,17 +32,15 @@ export const useAthleteStore = create<AthleteStore>()(
       bootstrap: async () => {
         set({ status: "loading" });
         try {
-          const list = await api.athletes.list();
-          if (list.length === 0) {
+          // The authenticated user's own athlete profile (404 = not onboarded yet).
+          const athlete = await api.athletes.getMe();
+          set({ athlete, status: "ready" });
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404) {
             set({ athlete: null, status: "none" });
-            return;
+          } else {
+            set({ status: "error" });
           }
-          // single-user app: prefer previously-selected id, else first
-          const prev = get().athlete?.id;
-          const match = list.find((a) => a.id === prev) ?? list[0];
-          set({ athlete: match, status: "ready" });
-        } catch {
-          set({ status: "error" });
         }
       },
       setAthlete: (a) => set({ athlete: a, status: "ready" }),

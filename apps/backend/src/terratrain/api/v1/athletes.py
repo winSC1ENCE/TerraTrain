@@ -1,13 +1,21 @@
-import uuid
+from datetime import date as date_type
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from terratrain.api.deps import get_session
+from terratrain.api.deps import (
+    get_current_active_user,
+    get_current_athlete,
+    get_session,
+    require_admin,
+)
 from terratrain.db.models.athlete import Athlete
+from terratrain.db.models.user import User
 from terratrain.schemas.athlete import AthleteCreate, AthleteResponse, AthleteUpdate, SyncResponse
+from terratrain.services.fitness_service import get_fitness as fitness
 from terratrain.services.intervals_client import IntervalsClient
 from terratrain.services.security import encrypt_value
 
@@ -15,12 +23,14 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
-@router.post("", response_model=AthleteResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/me", response_model=AthleteResponse, status_code=status.HTTP_201_CREATED)
 async def create_athlete(
     body: AthleteCreate,
+    user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_session),
 ) -> Athlete:
     athlete = Athlete(
+        user_id=user.id,
         intervals_user_id=body.intervals_user_id,
         name=body.name,
         sport=body.sport,
@@ -36,32 +46,28 @@ async def create_athlete(
         ),
     )
     session.add(athlete)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="athlete profile already exists"
+        ) from exc
     await session.refresh(athlete)
     return athlete
 
 
-@router.get("/{athlete_id}", response_model=AthleteResponse)
-async def get_athlete(
-    athlete_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
-) -> Athlete:
-    athlete = await session.get(Athlete, athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
+@router.get("/me", response_model=AthleteResponse)
+async def get_athlete(athlete: Athlete = Depends(get_current_athlete)) -> Athlete:
     return athlete
 
 
-@router.put("/{athlete_id}", response_model=AthleteResponse)
+@router.put("/me", response_model=AthleteResponse)
 async def update_athlete(
-    athlete_id: uuid.UUID,
     body: AthleteUpdate,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> Athlete:
-    athlete = await session.get(Athlete, athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
-
     for field, value in body.model_dump(exclude_none=True).items():
         if field == "intervals_api_key":
             athlete.intervals_api_key_encrypted = encrypt_value(value)
@@ -73,27 +79,21 @@ async def update_athlete(
     return athlete
 
 
-@router.delete("/{athlete_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_athlete(
-    athlete_id: uuid.UUID,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    athlete = await session.get(Athlete, athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
     await session.delete(athlete)
     await session.commit()
 
 
-@router.post("/{athlete_id}/sync", response_model=SyncResponse)
+@router.post("/me/sync", response_model=SyncResponse)
 async def sync_athlete(
-    athlete_id: uuid.UUID,
     days: int = 90,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> SyncResponse:
-    athlete = await session.get(Athlete, athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
     if not athlete.intervals_api_key_encrypted:
         raise HTTPException(status_code=400, detail="No Intervals.icu API key configured")
 
@@ -105,15 +105,16 @@ async def sync_athlete(
 @router.get("", response_model=list[AthleteResponse])
 async def list_athletes(
     session: AsyncSession = Depends(get_session),
+    _admin: User = Depends(require_admin),
 ) -> list[Athlete]:
     result = await session.execute(select(Athlete))
     return list(result.scalars().all())
 
 
-@router.get("/{athlete_id}/fitness")
-async def get_fitness(
-    athlete_id: uuid.UUID,
+@router.get("/me/fitness")
+async def get_fitness_endpoint(
     days: int = 90,
+    athlete: Athlete = Depends(get_current_athlete),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Daily PMC series (CTL/ATL/TSB) for the dashboard chart.
@@ -121,17 +122,9 @@ async def get_fitness(
     Falls back to Intervals.icu wellness data for Strava-sourced athletes
     whose local sessions carry no TSS.
     """
-    from datetime import date as date_type
-
-    from terratrain.services.fitness_service import get_fitness as fitness
-
-    athlete = await session.get(Athlete, athlete_id)
-    if not athlete:
-        raise HTTPException(status_code=404, detail="Athlete not found")
-
     pmc = await fitness(athlete, session, days=days)
     return {
-        "athlete_id": str(athlete_id),
+        "athlete_id": str(athlete.id),
         "as_of": date_type.today().isoformat(),
         **pmc,
     }

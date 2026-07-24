@@ -158,7 +158,7 @@ class TrainingAnalytics:
 
     @staticmethod
     def calculate_zones(ftp: int, model: str = "coggan_classic") -> dict:
-        """Return power zone boundaries as percentage of FTP."""
+        """Return power zone boundaries as percentage of FTP (cycling)."""
         if model == "coggan_classic":
             return {
                 "z1": {"name": "Active Recovery", "min_pct": 0, "max_pct": 55},
@@ -170,3 +170,92 @@ class TrainingAnalytics:
                 "z7": {"name": "Neuromuscular", "min_pct": 151, "max_pct": 999},
             }
         raise ValueError(f"Unknown zone model: {model}")
+
+    # (name, min_pct, max_pct) — bounds table shared by the threshold-relative
+    # pace/HR zone calculators below. Keeping these as plain (str, float, float)
+    # tuples (rather than mixed-type dict literals) lets mypy track the numeric
+    # types correctly through the arithmetic that follows.
+    _RUNNING_PACE_ZONE_BOUNDS: tuple[tuple[str, str, float, float], ...] = (
+        ("z1", "Recovery", 130.0, 999.0),
+        ("z2", "Endurance", 114.0, 129.0),
+        ("z3", "Tempo", 106.0, 113.0),
+        ("z4", "Threshold", 99.0, 105.0),
+        ("z5", "VO2max", 85.0, 98.0),
+    )
+    _SWIM_CSS_ZONE_BOUNDS: tuple[tuple[str, str, float, float], ...] = (
+        ("z1", "Recovery", 121.0, 999.0),
+        ("z2", "Endurance", 111.0, 120.0),
+        ("z3", "Threshold (CSS)", 100.0, 110.0),
+        ("z4", "VO2max", 90.0, 99.0),
+        ("z5", "Sprint", 0.0, 89.0),
+    )
+    _HR_ZONE_BOUNDS: tuple[tuple[str, str, float, float], ...] = (
+        ("z1", "Recovery", 0.0, 80.0),
+        ("z2", "Endurance", 81.0, 89.0),
+        ("z3", "Tempo", 90.0, 93.0),
+        ("z4", "Threshold", 94.0, 99.0),
+        ("z5", "VO2max", 100.0, 110.0),
+    )
+
+    @staticmethod
+    def calculate_running_pace_zones(threshold_pace_s_per_m: float) -> dict:
+        """Pace zones as % of threshold pace (seconds per meter), for running.
+
+        Since pace is time-per-distance (not an output rate like power), the
+        convention is inverted from power zones: >100% of threshold pace is
+        SLOWER (recovery/endurance), <100% is FASTER (VO2max/speed) — this
+        mirrors standard Daniels/Pfitzinger threshold-relative pace zones.
+        """
+        zones: dict = {}
+        for key, name, min_pct, max_pct in TrainingAnalytics._RUNNING_PACE_ZONE_BOUNDS:
+            zones[key] = {
+                "name": name,
+                "min_pct": min_pct,
+                "max_pct": max_pct,
+                "min_pace_s_per_m": round(threshold_pace_s_per_m * min_pct / 100, 4),
+                "max_pace_s_per_m": (
+                    round(threshold_pace_s_per_m * max_pct / 100, 4) if max_pct < 999 else None
+                ),
+            }
+        return zones
+
+    @staticmethod
+    def calculate_swim_css_zones(css_pace_s_per_100m: float) -> dict:
+        """Pace zones as % of Critical Swim Speed (CSS), seconds per 100m.
+
+        Same inverted convention as running: >100% of CSS pace is slower,
+        <100% is faster.
+        """
+        zones: dict = {}
+        for key, name, min_pct, max_pct in TrainingAnalytics._SWIM_CSS_ZONE_BOUNDS:
+            zones[key] = {
+                "name": name,
+                "min_pct": min_pct,
+                "max_pct": max_pct,
+                "min_pace_s_per_100m": (
+                    round(css_pace_s_per_100m * min_pct / 100, 2) if min_pct > 0 else 0.0
+                ),
+                "max_pace_s_per_100m": (
+                    round(css_pace_s_per_100m * max_pct / 100, 2) if max_pct < 999 else None
+                ),
+            }
+        return zones
+
+    @staticmethod
+    def calculate_hr_zones(lthr: int) -> dict:
+        """HR zones as % of Lactate Threshold Heart Rate (LTHR).
+
+        Used for cross-country skiing, where power meters are rare and
+        pace is too terrain/snow-dependent to standardize — the standard
+        practical fallback is heart rate (Joe Friel / TrainingPeaks model).
+        """
+        zones: dict = {}
+        for key, name, min_pct, max_pct in TrainingAnalytics._HR_ZONE_BOUNDS:
+            zones[key] = {
+                "name": name,
+                "min_pct": min_pct,
+                "max_pct": max_pct,
+                "min_bpm": round(lthr * min_pct / 100),
+                "max_bpm": round(lthr * max_pct / 100),
+            }
+        return zones

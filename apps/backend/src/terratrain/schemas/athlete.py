@@ -3,13 +3,16 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from terratrain.constants import SPORT_PATTERN
+
 
 class AthleteCreate(BaseModel):
     intervals_user_id: str
     name: str
-    sport: str = Field(pattern="^(cycling|running|triathlon)$")
+    sport: str = Field(pattern=SPORT_PATTERN)
     ftp_watts: int | None = None
     threshold_pace_s_per_m: float | None = None
+    css_pace_s_per_100m: float | None = None
     lthr: int | None = None
     max_hr: int | None = None
     resting_hr: int | None = None
@@ -20,8 +23,10 @@ class AthleteCreate(BaseModel):
 
 class AthleteUpdate(BaseModel):
     name: str | None = None
+    sport: str | None = Field(default=None, pattern=SPORT_PATTERN)
     ftp_watts: int | None = None
     threshold_pace_s_per_m: float | None = None
+    css_pace_s_per_100m: float | None = None
     lthr: int | None = None
     max_hr: int | None = None
     resting_hr: int | None = None
@@ -35,11 +40,11 @@ class AthleteResponse(BaseModel):
 
     id: uuid.UUID
     intervals_user_id: str
-    strava_athlete_id: str | None
     name: str
     sport: str
     ftp_watts: int | None
     threshold_pace_s_per_m: float | None
+    css_pace_s_per_100m: float | None
     lthr: int | None
     max_hr: int | None
     resting_hr: int | None

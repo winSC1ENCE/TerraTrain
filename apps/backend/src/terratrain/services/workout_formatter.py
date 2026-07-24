@@ -103,24 +103,36 @@ class WorkoutFormatter:
 
     @staticmethod
     def apply_press_lap(structured_text: str, enabled: bool) -> str:
-        """Add or remove the leading "- Press lap" line to match `enabled`.
+        """Add or remove 'Press lap ' on step lines (`- ...`) to match `enabled`.
 
         Idempotent either way: calling with the same `enabled` value twice
         leaves the text unchanged, so this is safe to call both at workout
-        generation time and whenever the Workout.press_lap flag is toggled
-        later via an update.
+        generation time and whenever the Workout.press_lap flag is toggled.
         """
-        lines = structured_text.split("\n") if structured_text else []
-        has_marker = bool(lines) and lines[0].strip() == PRESS_LAP_LINE
+        if not structured_text:
+            return ""
 
-        if enabled and not has_marker:
-            lines.insert(0, PRESS_LAP_LINE)
-        elif not enabled and has_marker:
+        lines = structured_text.split("\n")
+        # Remove standalone legacy "- Press lap" line if present at start
+        if lines and lines[0].strip() == "- Press lap":
             lines.pop(0)
             while lines and lines[0] == "":
                 lines.pop(0)
 
-        return "\n".join(lines)
+        new_lines = []
+        for line in lines:
+            if enabled:
+                if line.startswith("- ") and not line.startswith("- Press lap "):
+                    new_lines.append("- Press lap " + line[2:])
+                else:
+                    new_lines.append(line)
+            else:
+                if line.startswith("- Press lap "):
+                    new_lines.append("- " + line[12:])
+                else:
+                    new_lines.append(line)
+
+        return "\n".join(new_lines)
 
     @staticmethod
     def _collect_group(phases: list[WorkoutPhase], start: int) -> list[WorkoutPhase]:

@@ -277,21 +277,21 @@ def test_endurance_validation_uses_relative_intensity_wording_for_non_cycling():
     assert not any("FTP" in e for e in errors)
 
 
-def test_apply_press_lap_inserts_first_line():
+def test_apply_press_lap_prepends_to_step_lines():
     text = "- Warmup 15m 65%\n- Threshold 20m 95%"
     result = WorkoutFormatter.apply_press_lap(text, enabled=True)
-    assert result.startswith("- Press lap\n- Warmup 15m 65%")
+    assert result == "- Press lap Warmup 15m 65%\n- Press lap Threshold 20m 95%"
 
 
 def test_apply_press_lap_is_idempotent_when_already_present():
-    text = "- Press lap\n- Warmup 15m 65%"
+    text = "- Press lap Warmup 15m 65%\n- Press lap Threshold 20m 95%"
     result = WorkoutFormatter.apply_press_lap(text, enabled=True)
     assert result == text
-    assert result.count("- Press lap") == 1
+    assert result.count("- Press lap ") == 2
 
 
 def test_apply_press_lap_removes_marker_when_disabled():
-    text = "- Press lap\n- Warmup 15m 65%\n- Threshold 20m 95%"
+    text = "- Press lap Warmup 15m 65%\n- Press lap Threshold 20m 95%"
     result = WorkoutFormatter.apply_press_lap(text, enabled=False)
     assert result == "- Warmup 15m 65%\n- Threshold 20m 95%"
 
@@ -302,5 +302,5 @@ def test_apply_press_lap_disabled_on_text_without_marker_is_noop():
 
 
 def test_apply_press_lap_on_empty_text():
-    assert WorkoutFormatter.apply_press_lap("", enabled=True) == "- Press lap"
+    assert WorkoutFormatter.apply_press_lap("", enabled=True) == ""
     assert WorkoutFormatter.apply_press_lap("", enabled=False) == ""

@@ -23,7 +23,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (status === "authenticated" && user) {
-      router.replace(user.must_change_password ? "/change-password" : "/");
+      router.replace(user.must_change_password ? "/change-password" : "/dashboard");
     }
   }, [status, user, router]);
 
@@ -33,7 +33,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const u = await login(email.trim().toLowerCase(), password);
-      router.replace(u.must_change_password ? "/change-password" : "/");
+      router.replace(u.must_change_password ? "/change-password" : "/dashboard");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -45,7 +45,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <img src="/terratrain_logo.svg" alt="TerraTrain" className="mx-auto mb-4 h-16 w-auto" />
+          <img src="/brand/mark.svg" alt="TerraTrain" className="mx-auto mb-4 h-16 w-auto" />
           <h1 className="text-xl font-bold tracking-tight">Anmelden</h1>
           <p className="mt-1 text-sm text-text-muted">Melde dich bei TerraTrain an</p>
         </div>

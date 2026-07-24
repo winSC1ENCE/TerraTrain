@@ -42,7 +42,7 @@ export default function ChangePasswordPage() {
     try {
       await api.auth.changePassword(currentPassword, newPassword);
       if (user) setUser({ ...user, must_change_password: false });
-      router.replace("/");
+      router.replace("/dashboard");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -54,7 +54,7 @@ export default function ChangePasswordPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <img src="/terratrain_logo.svg" alt="TerraTrain" className="mx-auto mb-4 h-16 w-auto" />
+          <img src="/brand/mark.svg" alt="TerraTrain" className="mx-auto mb-4 h-16 w-auto" />
           <h1 className="text-xl font-bold tracking-tight">Passwort ändern</h1>
           <p className="mt-1 text-sm text-text-muted">
             Bitte lege ein neues Passwort fest, bevor du fortfährst.

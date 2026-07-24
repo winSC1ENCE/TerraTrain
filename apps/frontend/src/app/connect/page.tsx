@@ -45,7 +45,7 @@ export default function ConnectPage() {
 
   // Already connected? Go to dashboard.
   useEffect(() => {
-    if (mounted && status === "ready") router.replace("/");
+    if (mounted && status === "ready") router.replace("/dashboard");
   }, [mounted, status, router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -86,7 +86,7 @@ export default function ConnectPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <img src="/terratrain_logo.svg" alt="TerraTrain Logo" className="mx-auto mb-4 h-16 w-auto" />
+          <img src="/brand/mark.svg" alt="TerraTrain Logo" className="mx-auto mb-4 h-16 w-auto" />
           <h1 className="text-xl font-bold tracking-tight">{t.connect.title}</h1>
           <p className="mt-1 text-sm text-text-muted">{t.connect.subtitle}</p>
         </div>
@@ -179,7 +179,7 @@ export default function ConnectPage() {
                   <p className="mt-3 text-xs text-warning">{t.connect.syncFailed}</p>
                 )}
 
-                <Button className="mt-5 w-full" onClick={() => router.replace("/")}>
+                <Button className="mt-5 w-full" onClick={() => router.replace("/dashboard")}>
                   {t.connect.goToDashboard}
                 </Button>
               </div>

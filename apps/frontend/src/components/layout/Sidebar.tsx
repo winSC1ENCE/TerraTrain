@@ -19,7 +19,7 @@ export function Sidebar() {
   const t = useT();
 
   const items = [
-    { href: "/", label: t.nav.dashboard, icon: LayoutDashboard },
+    { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/coach", label: t.nav.coach, icon: Brain },
     { href: "/weekly-planner", label: t.nav.weeklyPlanner, icon: Calendar },
     { href: "/routes", label: t.nav.routes, icon: Map },
@@ -31,14 +31,14 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex flex-col w-16 lg:w-60 shrink-0 border-r border-border bg-surface min-h-screen sticky top-0">
       <div className="flex items-center gap-2.5 px-4 lg:px-5 h-14 border-b border-border">
-        <img src="/terratrain_icon.svg" alt="TerraTrain Icon" className="h-6 w-6 shrink-0" />
+        <img src="/brand/mark.svg" alt="TerraTrain Icon" className="h-6 w-6 shrink-0" />
         <span className="hidden lg:block text-sm font-bold tracking-tight">
           TerraTrain
         </span>
       </div>
       <nav className="flex flex-col gap-0.5 p-2 lg:p-3">
         {items.map(({ href, label, icon: Icon }) => {
-          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
@@ -65,7 +65,7 @@ export function MobileTabBar() {
   const t = useT();
 
   const items = [
-    { href: "/", label: t.nav.dashboard, icon: LayoutDashboard },
+    { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/coach", label: t.nav.coach, icon: Brain },
     { href: "/weekly-planner", label: t.nav.weeklyPlanner, icon: Calendar },
     { href: "/routes", label: t.nav.routes, icon: Map },
@@ -77,7 +77,7 @@ export function MobileTabBar() {
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 flex justify-around border-t border-border bg-surface py-1.5">
       {items.map(({ href, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const active = pathname === href || pathname.startsWith(href + "/");
         return (
           <Link
             key={href}

@@ -72,7 +72,7 @@ export function useCoachStream() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/coaching/generate`, {
+      const res = await fetch(`${API_BASE}/coaching/generate`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...csrfHeaders() },

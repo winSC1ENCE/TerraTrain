@@ -743,6 +743,7 @@ When ready, call final_answer with the complete workout plan.
             ) from exc
 
         if resp.status_code >= 400:
+            logger.error("gemini.api_error", status_code=resp.status_code, body=resp.text[:500])
             raise OllamaError(
                 f"Gemini API returned an error (HTTP {resp.status_code}): {resp.text[:200]}"
             )

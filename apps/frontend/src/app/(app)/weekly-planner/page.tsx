@@ -213,7 +213,7 @@ export default function WeeklyPlannerPage() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/weekly-plans/generate`, {
+      const res = await fetch(`${API_BASE}/weekly-plans/generate`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...csrfHeaders() },

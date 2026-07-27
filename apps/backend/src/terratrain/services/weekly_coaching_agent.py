@@ -706,6 +706,7 @@ Here is an example structure of the arguments for calling `final_answer` (one da
             ) from exc
 
         if resp.status_code >= 400:
+            logger.error("gemini.api_error", status_code=resp.status_code, body=resp.text[:500])
             raise OllamaError(
                 f"Gemini API returned an error (HTTP {resp.status_code}): {resp.text[:200]}"
             )

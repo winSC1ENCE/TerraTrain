@@ -33,7 +33,7 @@ export function WorkoutTypeSelector({
               style={{ width: 18, height: 18 }}
               className={active ? "text-accent" : ""}
             />
-            {t.coach.types[v] ?? v}
+            {(t.coach.types as Record<string, string>)[v] ?? v}
           </button>
         );
       })}

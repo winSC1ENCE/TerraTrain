@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import type { Athlete, SyncResult } from "@/lib/types";
+import type { Athlete, Sport, SyncResult } from "@/lib/types";
 
 type Step = "form" | "syncing" | "success";
 
@@ -37,7 +37,7 @@ export default function ConnectPage() {
   const [intervalsId, setIntervalsId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [name, setName] = useState("");
-  const [sport, setSport] = useState("cycling");
+  const [sport, setSport] = useState<Sport>("cycling");
   const [error, setError] = useState<string | null>(null);
   const [athlete, setLocalAthlete] = useState<Athlete | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);

@@ -184,14 +184,14 @@ export default function WorkoutsPage() {
                     <div className="min-w-0">
                       <h2 className="truncate text-sm font-semibold text-text">{w.name}</h2>
                       <p className="mt-0.5 text-xs text-text-muted">
-                        {t.coach.types[w.workout_type] ?? w.workout_type}
+                        {w.workout_type ? ((t.coach.types as Record<string, string>)[w.workout_type] ?? w.workout_type) : ""}
                         {w.duration_seconds ? ` · ${formatDuration(w.duration_seconds)}` : ""}
                         {w.target_tss ? ` · TSS ${Math.round(w.target_tss)}` : ""}
                         {w.scheduled_date ? ` · ${formatDate(w.scheduled_date)}` : ""}
                       </p>
                     </div>
-                    <Badge variant={statusVariant[w.status] ?? "default"}>
-                      {t.workouts.status[w.status] ?? w.status}
+                    <Badge variant={w.status ? (statusVariant[w.status] ?? "default") : "default"}>
+                      {w.status || ""}
                     </Badge>
                   </div>
 
@@ -277,7 +277,7 @@ export default function WorkoutsPage() {
                         setEditName(w.name);
                         setEditStructuredText(w.structured_text ?? "");
                         setEditSport(w.sport);
-                        setEditPressLap(w.press_lap);
+                        setEditPressLap(w.press_lap ?? false);
                       }}
                     >
                       <Pencil className="h-3.5 w-3.5" />

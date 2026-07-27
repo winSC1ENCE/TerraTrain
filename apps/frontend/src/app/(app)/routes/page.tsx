@@ -350,7 +350,7 @@ export default function RoutesPage() {
                     <ArrowUpRight className="h-3 w-3 text-emerald-500" /> Höhenmeter
                   </span>
                   <p className="text-base font-bold text-text mt-0.5">+{Math.round(selectedRoute.elevation_gain_m)} hm</p>
-                  <p className="text-[10px] text-text-muted">-{Math.round(selectedRoute.elevation_loss_m)} hm Abfahrt</p>
+                  <p className="text-[10px] text-text-muted">-{Math.round(selectedRoute.elevation_loss_m || 0)} hm Abfahrt</p>
                 </div>
                 <div className="bg-surface p-3 rounded-xl border border-border/60">
                   <span className="text-[10px] uppercase font-bold text-text-muted flex items-center gap-1">

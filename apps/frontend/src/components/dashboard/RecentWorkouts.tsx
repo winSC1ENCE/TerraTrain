@@ -43,13 +43,13 @@ export function RecentWorkouts() {
                   <div className="min-w-0">
                     <p className="truncate text-sm text-text">{w.name}</p>
                     <p className="text-xs text-text-muted">
-                      {t.coach.types[w.workout_type] ?? w.workout_type}
+                      {w.workout_type ? ((t.coach.types as Record<string, string>)[w.workout_type] ?? w.workout_type) : ""}
                       {w.scheduled_date ? ` · ${formatDate(w.scheduled_date)}` : ""}
                       {w.target_tss ? ` · TSS ${Math.round(w.target_tss)}` : ""}
                     </p>
                   </div>
-                  <Badge variant={statusVariant[w.status] ?? "default"}>
-                    {t.workouts.status[w.status] ?? w.status}
+                  <Badge variant={w.status ? (statusVariant[w.status] ?? "default") : "default"}>
+                    {w.status || ""}
                   </Badge>
                 </Link>
               </li>

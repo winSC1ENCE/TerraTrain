@@ -158,7 +158,7 @@ export default function SettingsPage() {
           <CardTitle>{t.settings.intervals}</CardTitle>
         </CardHeader>
         <CardBody className="space-y-4">
-          <Input label={t.settings.athleteId} value={athlete.intervals_user_id} readOnly disabled />
+          <Input label={t.settings.athleteId} value={athlete.intervals_user_id ?? ""} readOnly disabled />
           <Input
             label={t.settings.apiKey}
             hint={t.settings.apiKeyHint}

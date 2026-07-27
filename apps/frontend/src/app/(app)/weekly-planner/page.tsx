@@ -343,7 +343,7 @@ export default function WeeklyPlannerPage() {
     setEditName(w.name);
     setEditStructuredText(w.structured_text ?? "");
     setEditSport(w.sport);
-    setEditPressLap(w.press_lap);
+    setEditPressLap(w.press_lap ?? false);
   }
 
   async function handleSaveWorkout() {
@@ -395,7 +395,7 @@ export default function WeeklyPlannerPage() {
       plan.start_date.toLowerCase().includes(query) ||
       formattedDate.toLowerCase().includes(query) ||
       plan.mesocycle_type.toLowerCase().includes(query) ||
-      plan.week_type.toLowerCase().includes(query) ||
+      (plan.week_type && plan.week_type.toLowerCase().includes(query)) ||
       (plan.coach_rationale && plan.coach_rationale.toLowerCase().includes(query)) ||
       (plan.notes && plan.notes.toLowerCase().includes(query))
     );
@@ -487,7 +487,7 @@ export default function WeeklyPlannerPage() {
                           )}
                         </div>
                         <h3 className="font-bold text-sm text-text">
-                          {plan.mesocycle_type} Zyklus • {plan.week_type.startsWith("load") ? `Belastungswoche ${plan.week_type.split("_")[1]}` : "Erholungswoche"}
+                          {plan.mesocycle_type} Zyklus • {(plan.week_type || "").startsWith("load") ? `Belastungswoche ${(plan.week_type || "").split("_")[1] || "1"}` : "Erholungswoche"}
                         </h3>
                         <p className="text-xs text-text-muted mt-1">
                           {totalWorkouts} Einheiten geplant
@@ -818,7 +818,7 @@ export default function WeeklyPlannerPage() {
                               <strong className="text-text">
                                 {generatedPlan.week_type === "recovery"
                                   ? "Erholung"
-                                  : `Belastung (Woche ${generatedPlan.week_type.split("_")[1]})`}
+                                  : `Belastung (Woche ${(generatedPlan.week_type || "").split("_")[1] || "1"})`}
                               </strong>
                             </span>
                             <span>

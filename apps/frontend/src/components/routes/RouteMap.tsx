@@ -9,6 +9,7 @@ export interface TrackPoint {
   lon: number;
   ele: number;
   km: number;
+  dist_m?: number;
 }
 
 export interface ClimbSegmentData {

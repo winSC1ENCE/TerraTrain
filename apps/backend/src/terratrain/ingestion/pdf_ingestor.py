@@ -82,9 +82,6 @@ class PdfIngestor:
                 self._session.add(chunk)
             total += len(batch)
 
-            if batch_start + batch_size < len(chunks):
-                await asyncio.sleep(3.0)
-
         await self._session.commit()
         logger.info("pdf_ingestor.done", filename=filename, chunks=total)
         return total
@@ -147,8 +144,8 @@ class PdfIngestor:
         return chunks
 
     @retry(
-        stop=stop_after_attempt(8),
-        wait=wait_random_exponential(min=2, max=30),
+        stop=stop_after_attempt(3),
+        wait=wait_random_exponential(min=1, max=10),
         retry=retry_if_exception(_is_retryable_exception),
         reraise=True,
     )
@@ -178,16 +175,27 @@ class PdfIngestor:
                 data = resp.json()
                 return [item["embedding"] for item in data["data"]]
         else:
-            embeddings = []
-            async with httpx.AsyncClient(timeout=120) as client:
-                for text in texts:
-                    resp = await client.post(
-                        f"{settings.ollama_base_url}/api/embeddings",
-                        json={"model": settings.ollama_embed_model, "prompt": text},
-                    )
-                    resp.raise_for_status()
-                    embeddings.append(resp.json()["embedding"])
-            return embeddings
+            async with httpx.AsyncClient(timeout=30) as client:
+                async def _embed_one(text: str) -> list[float]:
+                    try:
+                        resp = await client.post(
+                            f"{settings.ollama_base_url}/api/embeddings",
+                            json={"model": settings.ollama_embed_model, "prompt": text},
+                        )
+                        resp.raise_for_status()
+                        return resp.json()["embedding"]
+                    except httpx.ConnectError as err:
+                        raise RuntimeError(
+                            f"Could not connect to Ollama at {settings.ollama_base_url}. Ensure Ollama is running."
+                        ) from err
+                    except httpx.HTTPStatusError as err:
+                        if err.response.status_code == 404:
+                            raise RuntimeError(
+                                f"Ollama model '{settings.ollama_embed_model}' not found. Run 'ollama pull {settings.ollama_embed_model}'."
+                            ) from err
+                        raise
+
+                return list(await asyncio.gather(*[_embed_one(t) for t in texts]))
 
     @staticmethod
     def _deterministic_id(filename: str, content: bytes) -> uuid.UUID:

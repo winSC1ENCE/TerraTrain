@@ -1,5 +1,5 @@
 import structlog
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +18,20 @@ async def ingest_document(
 ) -> dict:
     content = await pdf_file.read()
     ingestor = PdfIngestor(session=session)
-    chunks_created = await ingestor.ingest_bytes(
-        content=content,
-        filename=pdf_file.filename or "unknown.pdf",
-    )
+    try:
+        chunks_created = await ingestor.ingest_bytes(
+            content=content,
+            filename=pdf_file.filename or "unknown.pdf",
+        )
+    except (ValueError, RuntimeError) as exc:
+        logger.error("document_ingest.error", error=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("document_ingest.failed", error=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to ingest document: {exc}",
+        ) from exc
     return {"chunks_created": chunks_created, "filename": pdf_file.filename}
 
 

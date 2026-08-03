@@ -36,6 +36,37 @@ export function csrfHeaders(): Record<string, string> {
   return token ? { "X-CSRF-Token": token } : {};
 }
 
+let isRefreshing = false;
+let refreshSubscribers: Array<(success: boolean) => void> = [];
+
+function onRefreshed(success: boolean) {
+  refreshSubscribers.forEach((cb) => cb(success));
+  refreshSubscribers = [];
+}
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (isRefreshing) {
+    return new Promise((resolve) => {
+      refreshSubscribers.push(resolve);
+    });
+  }
+  isRefreshing = true;
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    const ok = res.ok;
+    isRefreshing = false;
+    onRefreshed(ok);
+    return ok;
+  } catch {
+    isRefreshing = false;
+    onRefreshed(false);
+    return false;
+  }
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE}${endpoint}`;
   
@@ -49,11 +80,30 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers,
     credentials: "include",
   });
+
+  // Attempt automatic token refresh on 401 Unauthorized for non-auth requests
+  if (response.status === 401 && !endpoint.includes("/auth/")) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      const newHeaders: Record<string, string> = {
+        ...csrfHeaders(),
+        ...(options.headers as Record<string, string>),
+      };
+      if (options.body && !(options.body instanceof FormData) && !newHeaders["Content-Type"]) {
+        newHeaders["Content-Type"] = "application/json";
+      }
+      response = await fetch(url, {
+        ...options,
+        headers: newHeaders,
+        credentials: "include",
+      });
+    }
+  }
 
   if (!response.ok) {
     let errorData: any = null;
@@ -86,6 +136,10 @@ export const api = {
       }),
     logout: () =>
       request<void>("/auth/logout", {
+        method: "POST",
+      }),
+    refresh: () =>
+      request<User>("/auth/refresh", {
         method: "POST",
       }),
     changePassword: (current_password: string, new_password: string) =>

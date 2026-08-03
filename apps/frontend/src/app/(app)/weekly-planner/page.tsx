@@ -11,10 +11,12 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  FileText,
   Lock,
   MapPin,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   Send,
   Sparkles,
@@ -126,25 +128,181 @@ function getWeekOptions() {
 
 import { Slider } from "@/components/ui/Slider";
 
+const DEFAULT_SCHEDULES: ScheduleItem[] = [
+  { id: "1", day_of_week: 1, duration_min: 90, route_id: "", notes: "" },
+  { id: "3", day_of_week: 3, duration_min: 90, route_id: "", notes: "" },
+  { id: "5", day_of_week: 5, duration_min: 120, route_id: "", notes: "" },
+  { id: "6", day_of_week: 6, duration_min: 90, route_id: "", notes: "" },
+];
+
 export default function WeeklyPlannerPage() {
   const athlete = useAthlete();
   const t = useT();
 
-  const [startDate, setStartDate] = useState(getMonday());
-  const [mesocycleType, setMesocycleType] = useState("3-1");
-  const [weekType, setWeekType] = useState("load_1");
-  const [aggressiveness, setAggressiveness] = useState<number>(0);
-  const [globalNotes, setGlobalNotes] = useState("");
-  const [provider, setProvider] = useState("ollama");
-  const [pressLap, setPressLap] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  // Restore draft state from sessionStorage if present
+  const [startDate, setStartDate] = useState(() => {
+    if (typeof window === "undefined") return getMonday();
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.startDate) return parsed.startDate;
+      }
+    } catch {}
+    return getMonday();
+  });
+
+  const [mesocycleType, setMesocycleType] = useState(() => {
+    if (typeof window === "undefined") return "3-1";
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.mesocycleType) return parsed.mesocycleType;
+      }
+    } catch {}
+    return "3-1";
+  });
+
+  const [weekType, setWeekType] = useState(() => {
+    if (typeof window === "undefined") return "load_1";
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.weekType) return parsed.weekType;
+      }
+    } catch {}
+    return "load_1";
+  });
+
+  const [aggressiveness, setAggressiveness] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.aggressiveness === "number") return parsed.aggressiveness;
+      }
+    } catch {}
+    return 0;
+  });
+
+  const [globalNotes, setGlobalNotes] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.globalNotes !== undefined) return parsed.globalNotes;
+      }
+    } catch {}
+    return "";
+  });
+
+  const [provider, setProvider] = useState(() => {
+    if (typeof window === "undefined") return "ollama";
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.provider) return parsed.provider;
+      }
+    } catch {}
+    return "ollama";
+  });
+
+  const [pressLap, setPressLap] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.pressLap === "boolean") return parsed.pressLap;
+      }
+    } catch {}
+    return false;
+  });
 
   // Day schedules setup
-  const [schedules, setSchedules] = useState<ScheduleItem[]>(() => [
-    { id: "1", day_of_week: 1, duration_min: 90, route_id: "", notes: "" },
-    { id: "3", day_of_week: 3, duration_min: 90, route_id: "", notes: "" },
-    { id: "5", day_of_week: 5, duration_min: 120, route_id: "", notes: "" },
-    { id: "6", day_of_week: 6, duration_min: 90, route_id: "", notes: "" },
-  ]);
+  const [schedules, setSchedules] = useState<ScheduleItem[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_SCHEDULES;
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.schedules) && parsed.schedules.length > 0) {
+          return parsed.schedules;
+        }
+      }
+    } catch {}
+    return DEFAULT_SCHEDULES;
+  });
+
+  // Persisted plan details
+  const [generatedPlan, setGeneratedPlan] = useState<WeeklyPlan | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const saved = sessionStorage.getItem("terratrain_active_plan_v1");
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return null;
+  });
+
+  // Auto-save draft changes to sessionStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const draft = {
+        startDate,
+        mesocycleType,
+        weekType,
+        aggressiveness,
+        globalNotes,
+        provider,
+        pressLap,
+        schedules,
+      };
+      sessionStorage.setItem("terratrain_planner_draft_v1", JSON.stringify(draft));
+    } catch (e) {
+      console.error("Failed to cache planner draft", e);
+    }
+  }, [startDate, mesocycleType, weekType, aggressiveness, globalNotes, provider, pressLap, schedules]);
+
+  // Auto-save active plan to sessionStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (generatedPlan) {
+        sessionStorage.setItem("terratrain_active_plan_v1", JSON.stringify(generatedPlan));
+      } else {
+        sessionStorage.removeItem("terratrain_active_plan_v1");
+      }
+    } catch (e) {
+      console.error("Failed to cache active plan", e);
+    }
+  }, [generatedPlan]);
+
+  const resetDraftForm = () => {
+    setStartDate(getMonday());
+    setMesocycleType("3-1");
+    setWeekType("load_1");
+    setAggressiveness(0);
+    setGlobalNotes("");
+    setProvider("ollama");
+    setPressLap(false);
+    setSchedules(DEFAULT_SCHEDULES);
+    setGeneratedPlan(null);
+    setShowForm(true);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("terratrain_planner_draft_v1");
+      sessionStorage.removeItem("terratrain_active_plan_v1");
+    }
+  };
 
   // Detection states
   const [detection, setDetection] = useState<{
@@ -282,7 +440,7 @@ export default function WeeklyPlannerPage() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/weekly-plans/generate`, {
+      let res = await fetch(`${API_BASE}/weekly-plans/generate`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...csrfHeaders() },
@@ -290,7 +448,28 @@ export default function WeeklyPlannerPage() {
         signal: controller.signal,
       });
 
+      if (res.status === 401) {
+        const refreshed = await api.auth.refresh().then(() => true).catch(() => false);
+        if (refreshed) {
+          res = await fetch(`${API_BASE}/weekly-plans/generate`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json", ...csrfHeaders() },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+        }
+      }
+
       if (!res.ok) {
+        if (res.status === 401) {
+          setStreamError("Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.");
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
+          setIsStreaming(false);
+          return;
+        }
         const err = await res.json().catch(() => ({ detail: "Weekly planning failed" }));
         setStreamError(err.detail ?? "Failed to initialize stream");
         setIsStreaming(false);
@@ -331,6 +510,7 @@ export default function WeeklyPlannerPage() {
           // Load fully populated weekly plan from backend
           api.weeklyPlans.get(planMeta.weekly_plan_id).then((fullPlan) => {
             setGeneratedPlan(fullPlan);
+            setShowForm(false);
             refetchPlans();
           });
           setIsStreaming(false);
@@ -566,6 +746,7 @@ export default function WeeklyPlannerPage() {
                         size="sm"
                         onClick={() => {
                           setGeneratedPlan(plan);
+                          setShowForm(false);
                           setActiveTab("new");
                         }}
                       >
@@ -586,16 +767,50 @@ export default function WeeklyPlannerPage() {
           )}
         </div>
       ) : (
-        <>
-          {!generatedPlan && (
+        <div className="space-y-6">
+          {generatedPlan && (
+            <div className="bg-surface border border-border/80 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+              <div className="text-xs">
+                <span className="font-semibold text-text">Erstellter Wochenplan:</span>{" "}
+                <span className="text-accent font-bold">
+                  Woche ab {new Date(generatedPlan.start_date).toLocaleDateString("de-CH")} ({generatedPlan.mesocycle_type} Zyklus)
+                </span>
+              </div>
+              <div className="flex gap-2">
+                {showForm ? (
+                  <Button size="xs" variant="primary" onClick={() => setShowForm(false)}>
+                    <FileText className="h-3.5 w-3.5 mr-1" /> Plan anzeigen
+                  </Button>
+                ) : (
+                  <Button size="xs" variant="outline" onClick={() => setShowForm(true)}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Formular / Bearbeiten
+                  </Button>
+                )}
+                <Button size="xs" variant="secondary" onClick={resetDraftForm}>
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Neuen Plan beginnen
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {(!generatedPlan || showForm) && (
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
               {/* Settings Panel */}
               <div className="lg:col-span-4 space-y-6">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <Sparkles className="h-4.5 w-4.5 text-accent" /> Periodisierung & Wochenwahl
                     </CardTitle>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="xs"
+                      onClick={resetDraftForm}
+                      title="Entwurf zurücksetzen"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" /> Zurücksetzen
+                    </Button>
                   </CardHeader>
                   <CardBody className="space-y-4 pt-1">
                     {/* Quick Week Selectors */}
@@ -929,7 +1144,7 @@ export default function WeeklyPlannerPage() {
           )}
 
           {/* Generated Weekly Plan Display */}
-          {generatedPlan && (
+          {generatedPlan && !showForm && (
             <div className="space-y-6">
               {(() => {
                 const isPast = isPastWeek(generatedPlan.start_date);

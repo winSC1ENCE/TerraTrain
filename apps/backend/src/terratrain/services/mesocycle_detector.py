@@ -14,14 +14,27 @@ class MesocycleDetector:
     async def get_tss_history_and_recommendation(
         athlete: Athlete, session: AsyncSession, start_date: date, mesocycle_type: str
     ) -> dict:
+        # Normalize start_date to the Monday of the selected week
+        start_monday = start_date - timedelta(days=start_date.weekday())
+        start_sunday = start_monday + timedelta(days=6)
+        sel_iso = start_monday.isocalendar()
+
+        selected_week_info = {
+            "week_number": sel_iso.week,
+            "year": sel_iso.year,
+            "start_date": start_monday.isoformat(),
+            "end_date": start_sunday.isoformat(),
+            "formatted": f"KW {sel_iso.week} ({start_monday.strftime('%d.%m.')} - {start_sunday.strftime('%d.%m.%Y')})",
+        }
+
         # 1. Fetch live daily load directly from Intervals.icu REST API wellness endpoint
         wellness_by_date: dict[str, float] = {}
         if athlete.intervals_api_key_encrypted and athlete.intervals_user_id:
             try:
                 from terratrain.services.intervals_client import IntervalsClient
                 client = IntervalsClient.from_athlete(athlete)
-                oldest = start_date - timedelta(weeks=4)
-                newest = start_date - timedelta(days=1)
+                oldest = start_monday - timedelta(weeks=4)
+                newest = start_monday - timedelta(days=1)
                 wellness_list = await client.get_wellness(oldest=oldest, newest=newest)
                 for w in wellness_list:
                     day_id = str(w.get("id"))
@@ -30,11 +43,12 @@ class MesocycleDetector:
             except Exception:
                 pass
 
-        # Calculate weekly TSS starting W-4 to W-1
+        # Calculate weekly TSS starting W-4 to W-1 relative to start_monday
         history = []
         for i in range(4, 0, -1):
-            w_start = start_date - timedelta(weeks=i)
+            w_start = start_monday - timedelta(weeks=i)
             w_end = w_start + timedelta(days=6)
+            w_iso = w_start.isocalendar()
 
             # Primary: Sum daily load from Intervals.icu REST API
             api_tss = 0.0
@@ -67,9 +81,12 @@ class MesocycleDetector:
             final_tss = max(api_tss, session_tss, workout_tss)
             history.append(
                 {
-                    "week_label": f"W-{i}",
+                    "week_label": f"KW {w_iso.week}",
+                    "week_number": w_iso.week,
+                    "week_offset": f"W-{i}",
                     "start_date": w_start.isoformat(),
                     "end_date": w_end.isoformat(),
+                    "date_range_formatted": f"{w_start.strftime('%d.%m.')} - {w_end.strftime('%d.%m.')}",
                     "tss": round(final_tss, 1),
                 }
             )
@@ -106,6 +123,7 @@ class MesocycleDetector:
                 reason = "Progression into Load Week 2."
 
         return {
+            "selected_week": selected_week_info,
             "history": history,
             "recommended_week_type": rec,
             "reasoning": reason,

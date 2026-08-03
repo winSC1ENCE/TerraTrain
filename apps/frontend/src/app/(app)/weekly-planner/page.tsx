@@ -62,12 +62,66 @@ const EN_DAYS_OF_WEEK = [
   "Sunday",
 ];
 
-function getNextMonday() {
-  const d = new Date();
+function getMonday(dateInput?: string | Date): string {
+  const d = dateInput ? new Date(dateInput) : new Date();
   const day = d.getDay();
-  const diff = day === 0 ? 1 : 8 - day;
+  const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   return d.toISOString().split("T")[0];
+}
+
+function getISOWeekDetails(dateInput: string | Date) {
+  const d = new Date(dateInput);
+  const dayNum = d.getDay() || 7;
+  d.setDate(d.getDate() + 4 - dayNum);
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return { weekNumber: weekNo, year: d.getFullYear() };
+}
+
+function formatWeekRange(mondayStr: string) {
+  const mon = new Date(mondayStr);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const iso = getISOWeekDetails(mon);
+
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const monFmt = `${pad(mon.getDate())}.${pad(mon.getMonth() + 1)}.`;
+  const sunFmt = `${pad(sun.getDate())}.${pad(sun.getMonth() + 1)}.${sun.getFullYear()}`;
+
+  return {
+    weekNumber: iso.weekNumber,
+    year: iso.year,
+    label: `KW ${iso.weekNumber} (${monFmt} - ${sunFmt})`,
+    shortLabel: `KW ${iso.weekNumber}`,
+    startDate: mondayStr,
+    endDate: sun.toISOString().split("T")[0],
+  };
+}
+
+function getWeekOptions() {
+  const currentMon = getMonday();
+  const options = [];
+
+  for (let offset = -4; offset <= 8; offset++) {
+    const d = new Date(currentMon);
+    d.setDate(d.getDate() + offset * 7);
+    const dateStr = d.toISOString().split("T")[0];
+    const range = formatWeekRange(dateStr);
+
+    let tag = "";
+    if (offset === 0) tag = " (Diese Woche)";
+    else if (offset === 1) tag = " (Nächste Woche)";
+    else if (offset === -1) tag = " (Letzte Woche)";
+
+    options.push({
+      value: dateStr,
+      label: `${range.label}${tag}`,
+      weekNumber: range.weekNumber,
+      isCurrent: offset === 0,
+    });
+  }
+  return options;
 }
 
 import { Slider } from "@/components/ui/Slider";
@@ -76,7 +130,7 @@ export default function WeeklyPlannerPage() {
   const athlete = useAthlete();
   const t = useT();
 
-  const [startDate, setStartDate] = useState(getNextMonday());
+  const [startDate, setStartDate] = useState(getMonday());
   const [mesocycleType, setMesocycleType] = useState("3-1");
   const [weekType, setWeekType] = useState("load_1");
   const [aggressiveness, setAggressiveness] = useState<number>(0);
@@ -94,7 +148,22 @@ export default function WeeklyPlannerPage() {
 
   // Detection states
   const [detection, setDetection] = useState<{
-    history: Array<{ week_label: string; start_date: string; end_date: string; tss: number }>;
+    selected_week?: {
+      week_number: number;
+      year: number;
+      start_date: string;
+      end_date: string;
+      formatted: string;
+    };
+    history: Array<{
+      week_label: string;
+      week_number?: number;
+      week_offset?: string;
+      start_date: string;
+      end_date: string;
+      date_range_formatted?: string;
+      tss: number;
+    }>;
     recommended_week_type: string;
     reasoning: string;
   } | null>(null);
@@ -525,17 +594,54 @@ export default function WeeklyPlannerPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      <Sparkles className="h-4.5 w-4.5 text-accent" /> Periodisierung
+                      <Sparkles className="h-4.5 w-4.5 text-accent" /> Periodisierung & Wochenwahl
                     </CardTitle>
                   </CardHeader>
                   <CardBody className="space-y-4 pt-1">
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input
-                        label="Startdatum (Mo)"
-                        type="date"
+                    {/* Quick Week Selectors */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-text-muted">Schnellauswahl</label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant={startDate === getMonday() ? "primary" : "outline"}
+                          onClick={() => setStartDate(getMonday())}
+                        >
+                          Diese Woche ({formatWeekRange(getMonday()).shortLabel})
+                        </Button>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant={
+                            startDate === getMonday(new Date(Date.now() + 7 * 86400000))
+                              ? "primary"
+                              : "outline"
+                          }
+                          onClick={() =>
+                            setStartDate(getMonday(new Date(Date.now() + 7 * 86400000)))
+                          }
+                        >
+                          Nächste Woche (
+                          {formatWeekRange(getMonday(new Date(Date.now() + 7 * 86400000))).shortLabel}
+                          )
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Select
+                        label="Trainingswoche wählen"
                         value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                      />
+                        onChange={(e) => setStartDate(getMonday(e.target.value))}
+                      >
+                        {getWeekOptions().map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+
                       <Select
                         label="Periodisierung"
                         value={mesocycleType}
@@ -546,32 +652,65 @@ export default function WeeklyPlannerPage() {
                       </Select>
                     </div>
 
+                    <div className="text-xs">
+                      <Input
+                        label="Startdatum (Mo der gewählten Woche)"
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(getMonday(e.target.value))}
+                      />
+                    </div>
+
                     {/* Auto detection section */}
                     <div className="bg-surface-2 rounded-lg p-3 border border-border/50 text-xs space-y-2">
                       <div className="font-semibold text-text flex items-center justify-between">
-                        <span>Meso-Erkennung (Intervals.icu)</span>
+                        <span className="flex items-center gap-1.5">
+                          <Activity className="h-3.5 w-3.5 text-accent" /> Meso-Erkennung (Past Load)
+                        </span>
                         {detectLoading && <span className="animate-pulse text-accent">Lädt...</span>}
                       </div>
+
+                      <div className="text-[11px] text-text-muted bg-surface/60 rounded p-2 border border-border/30">
+                        🎯 <span className="font-medium text-text">Gewählte Trainingswoche:</span>{" "}
+                        <span className="font-semibold text-accent">
+                          {detection?.selected_week?.formatted || formatWeekRange(startDate).label}
+                        </span>
+                      </div>
+
                       {detection && !detectLoading ? (
                         <>
-                          <div className="flex gap-2 items-center overflow-x-auto pb-1 mt-1.5 scrollbar-thin">
+                          <div className="text-[11px] text-text-muted mt-2 font-medium">
+                            Vergangene 4 Wochen Trainingsbelastung:
+                          </div>
+                          <div className="grid grid-cols-4 gap-1.5 pt-1">
                             {detection.history.map((h, i) => (
                               <div
                                 key={i}
-                                className="bg-surface border border-border/70 rounded px-2 py-1 text-center min-w-[70px]"
+                                className="bg-surface border border-border/70 rounded p-1.5 text-center shadow-xs"
                               >
-                                <div className="text-[10px] text-text-muted">{h.week_label}</div>
-                                <div className="font-bold text-text mt-0.5">{Math.round(h.tss)}</div>
-                                <div className="text-[9px] text-text-muted">TSS</div>
+                                <div className="text-[10px] font-bold text-accent">
+                                  {h.week_label}
+                                </div>
+                                <div className="text-[9px] text-text-muted leading-tight">
+                                  {h.date_range_formatted || h.week_offset}
+                                </div>
+                                <div className="font-extrabold text-text text-sm mt-1">
+                                  {Math.round(h.tss)}
+                                </div>
+                                <div className="text-[8px] text-text-muted uppercase tracking-wider">
+                                  TSS
+                                </div>
                               </div>
                             ))}
                           </div>
-                          <div className="text-[11px] text-accent mt-2 font-medium">
+                          <div className="text-[11px] text-accent mt-2 font-medium bg-accent/5 p-2 rounded border border-accent/20">
                             Empfehlung: {detection.reasoning}
                           </div>
                         </>
                       ) : (
-                        <div className="text-text-muted py-1">Gib ein Startdatum ein, um deinen Mesozyklus zu ermitteln.</div>
+                        <div className="text-text-muted py-1">
+                          Wähle eine Trainingswoche, um die 4 vergangenen Wochen zu analysieren.
+                        </div>
                       )}
                     </div>
 

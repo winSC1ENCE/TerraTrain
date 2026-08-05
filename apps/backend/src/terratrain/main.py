@@ -6,6 +6,7 @@ from slowapi.errors import RateLimitExceeded
 
 from terratrain.api.v1.router import router as v1_router
 from terratrain.config import get_settings
+from terratrain.db.migrate import run_migrations
 from terratrain.rate_limit import limiter
 from terratrain.services.admin_seed import seed_initial_admin
 
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup() -> None:
         logger.info("terratrain.startup", env=settings.app_env)
+        await run_migrations()
         await seed_initial_admin()
 
     @app.on_event("shutdown")

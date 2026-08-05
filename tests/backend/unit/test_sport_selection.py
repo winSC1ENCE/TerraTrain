@@ -36,3 +36,18 @@ def test_coaching_request_aggressiveness_range():
     with pytest.raises(Exception):
         CoachingRequest(workout_type="threshold", aggressiveness=5)
 
+
+def test_coaching_request_load_policy_validation():
+    req_default = CoachingRequest(workout_type="threshold")
+    assert req_default.load_policy == "target"
+
+    req_exceed = CoachingRequest(workout_type="threshold", load_policy="allow_exceed")
+    assert req_exceed.load_policy == "allow_exceed"
+
+    req_below = CoachingRequest(workout_type="threshold", load_policy="allow_fall_below")
+    assert req_below.load_policy == "allow_fall_below"
+
+    with pytest.raises(Exception):
+        CoachingRequest(workout_type="threshold", load_policy="invalid_policy")
+
+

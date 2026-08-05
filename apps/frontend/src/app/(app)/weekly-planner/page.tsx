@@ -16,6 +16,7 @@ import {
   MapPin,
   Pencil,
   Plus,
+  RefreshCw,
   RotateCcw,
   Search,
   Send,
@@ -34,6 +35,7 @@ import { CodeBlock } from "@/components/ui/CodeBlock";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { StreamPanel } from "@/components/coach/StreamPanel";
 import { PhaseBar } from "@/components/coach/PhaseBar";
+import { ReplanWorkoutModal } from "@/components/coach/ReplanWorkoutModal";
 
 interface ScheduleItem {
   id: string;
@@ -346,6 +348,23 @@ export default function WeeklyPlannerPage() {
   const [editSport, setEditSport] = useState<Sport>("cycling");
   const [editPressLap, setEditPressLap] = useState(false);
   const [savingWorkout, setSavingWorkout] = useState(false);
+
+  // Replan modal state
+  const [replanTargetWorkout, setReplanTargetWorkout] = useState<Workout | null>(null);
+  const [isReplanModalOpen, setIsReplanModalOpen] = useState(false);
+
+  const handleOpenReplan = (w: Workout) => {
+    setReplanTargetWorkout(w);
+    setIsReplanModalOpen(true);
+  };
+
+  const handleReplanSuccess = async () => {
+    if (generatedPlan) {
+      const fullPlan = await api.weeklyPlans.get(generatedPlan.id);
+      setGeneratedPlan(fullPlan);
+      refetchPlans();
+    }
+  };
   const [pushingAll, setPushingAll] = useState(false);
 
   // Fetch routes
@@ -1360,6 +1379,9 @@ export default function WeeklyPlannerPage() {
                                           <div className="flex gap-2 justify-end border-t border-border/50 pt-4">
                                             {!isPast && (
                                               <>
+                                                <Button size="sm" variant="secondary" onClick={() => handleOpenReplan(workout)}>
+                                                  <RefreshCw className="h-3.5 w-3.5 mr-1.5 text-accent" /> Mit AI neu planen
+                                                </Button>
                                                 <Button size="sm" variant="secondary" onClick={() => startEditWorkout(workout)}>
                                                   <Pencil className="h-3.5 w-3.5 mr-1.5" /> Bearbeiten
                                                 </Button>
@@ -1389,6 +1411,14 @@ export default function WeeklyPlannerPage() {
           )}
         </div>
       )}
+
+      <ReplanWorkoutModal
+        workout={replanTargetWorkout}
+        weeklyPlan={generatedPlan}
+        isOpen={isReplanModalOpen}
+        onClose={() => setIsReplanModalOpen(false)}
+        onSuccess={handleReplanSuccess}
+      />
     </div>
   );
 }

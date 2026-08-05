@@ -427,8 +427,10 @@ class CoachingAgent:
                 "name": route.name,
                 "distance_km": round(route.distance_m / 1000, 1),
                 "elevation_gain_m": round(route.elevation_gain_m, 0),
+                "elevation_loss_m": round(route.elevation_loss_m, 0),
                 "terrain_score": route.terrain_score,
                 "climbs": route.climb_profile[:6],
+                "downhills": (getattr(route, "downhill_profile", []) or route.analysis.get("downhill_profile", []))[:6],
             }
 
         return context
@@ -580,9 +582,10 @@ Notes: {ctx.get("notes") or "none"}
 Name: {route["name"]}
 Distance: {route["distance_km"]} km
 Elevation gain: {route["elevation_gain_m"]} m
+Elevation loss: {route.get("elevation_loss_m", 0)} m
 Terrain score: {route["terrain_score"]} (0=flat, 1=very hilly)
 """
-            if route["climbs"]:
+            if route.get("climbs"):
                 prompt += "Key climbs:\n"
                 for c in route["climbs"]:
                     start_km = c.get("start_km", 0.0)
@@ -593,6 +596,18 @@ Terrain score: {route["terrain_score"]} (0=flat, 1=very hilly)
                     prompt += (
                         f"  - km {start_km}–{end_km} (ESTIMATED RIDE WINDOW: min {start_min} to min {end_min}), "
                         f"{c['avg_grade_pct']}% avg grade, {c['elevation_gain_m']} m gain{cat_str}\n"
+                    )
+
+            if route.get("downhills"):
+                prompt += "Key downhills / descents:\n"
+                for d in route["downhills"]:
+                    start_km = d.get("start_km", 0.0)
+                    end_km = d.get("end_km", 0.0)
+                    start_min = round(start_km * (60.0 / 35.0))
+                    end_min = round(end_km * (60.0 / 35.0))
+                    prompt += (
+                        f"  - km {start_km}–{end_km} (ESTIMATED DESCENT WINDOW: min {start_min} to min {end_min}), "
+                        f"{d['avg_grade_pct']}% avg grade, {d['elevation_loss_m']} m loss\n"
                     )
 
         if rag:
@@ -606,8 +621,13 @@ Terrain score: {route["terrain_score"]} (0=flat, 1=very hilly)
 Design a structured workout that:
 1. Fits the athlete's current form (TSB) and training load
 2. Places high-intensity intervals ON the climbs (between climb start_km and end_km) if a route is provided. Warmup/prep must end right when reaching the climb.
-3. Follows evidence-based periodization from the training science context
-4. Produces a realistic, safe training stress
+3. Isolates downhill descent segments as dedicated low Z1 steps ("Downhill - Easy Z1 / Coast") with explicit lap instructions (e.g. description: "Downhill - Easy Z1 / Coast (Press Lap at bottom)").
+4. Ensures requested endurance volume (e.g., 60 min Z2) is planned ONLY on flats or climbs (excluding descent durations from work target calculation).
+5. Follows evidence-based periodization and micro-pacing rules:
+   - Suppress Variability Index (VI <= 1.05, Coggan & Allen 2010): Do NOT over-compensate in Z3/Z4 on flats after descents to boost average power.
+   - Protect Glycogen & Aerobic Adaptations (Seiler 2010): Aerobic gains come from cumulative Z1/Z2 time, not inflated average power.
+   - Aerodynamic Efficiency (Martin et al. 1998): Pedaling hard downhill >45 km/h is energetically wasteful due to quadratic drag scaling.
+   - In coach_notes, advise the athlete to remove Average Power & NP from main Garmin screen, using 3s Power, HR, and Lap Power instead.
 
 ## HARD RULES — plans violating these are rejected automatically
 {self._sport_hard_rules_block(sport)}

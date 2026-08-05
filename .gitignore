@@ -7,6 +7,7 @@ uv.lock
 apps/frontend/node_modules/
 apps/frontend/.next/
 docker/nginx/certs/
+.rag
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -229,3 +230,4 @@ __marimo__/
 .streamlit/secrets.toml
 helper.md
 *.tsbuildinfo
+

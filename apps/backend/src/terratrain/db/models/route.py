@@ -27,6 +27,7 @@ class Route(Base, TimestampMixin):
 
     # Terrain analysis (from gpx_analyzer.py)
     climb_profile: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    downhill_profile: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     terrain_score: Mapped[float | None] = mapped_column(nullable=True)
     surface_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     analysis: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

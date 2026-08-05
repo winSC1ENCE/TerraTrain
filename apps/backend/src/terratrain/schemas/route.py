@@ -15,6 +15,15 @@ class ClimbSegment(BaseModel):
     category: str | None = None  # hc | cat1 | cat2 | cat3 | cat4
 
 
+class DescentSegment(BaseModel):
+    start_km: float
+    end_km: float
+    avg_grade_pct: float
+    min_grade_pct: float
+    length_m: float
+    elevation_loss_m: float
+
+
 class RouteResponse(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -28,6 +37,7 @@ class RouteResponse(BaseModel):
     max_elevation_m: float | None
     min_elevation_m: float | None
     climb_profile: list[dict]
+    downhill_profile: list[dict] = []
     terrain_score: float | None
     surface_type: str | None
     analysis: dict

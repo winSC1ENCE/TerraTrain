@@ -23,9 +23,19 @@ export interface ClimbSegmentData {
   category?: string | null;
 }
 
+export interface DescentSegmentData {
+  start_km: number;
+  end_km: number;
+  avg_grade_pct: number;
+  min_grade_pct: number;
+  length_m: number;
+  elevation_loss_m: number;
+}
+
 interface RouteMapProps {
   trackPoints: TrackPoint[];
   climbs: ClimbSegmentData[];
+  downhills?: DescentSegmentData[];
   activeClimbIndex?: number | null;
   hoveredPoint?: TrackPoint | null;
   onClimbClick?: (index: number) => void;

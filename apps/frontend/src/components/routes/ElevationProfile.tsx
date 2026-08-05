@@ -10,11 +10,12 @@ import {
   Tooltip,
   ReferenceArea,
 } from "recharts";
-import type { TrackPoint, ClimbSegmentData } from "./RouteMap";
+import type { TrackPoint, ClimbSegmentData, DescentSegmentData } from "./RouteMap";
 
 interface ElevationProfileProps {
   trackPoints: TrackPoint[];
   climbs: ClimbSegmentData[];
+  downhills?: DescentSegmentData[];
   activeClimbIndex?: number | null;
   onClimbClick?: (index: number) => void;
   onHoverPoint?: (point: TrackPoint | null) => void;
@@ -56,12 +57,14 @@ function CustomTooltip({
   active,
   payload,
   climbs,
+  downhills = [],
   allTrackPoints,
   onHoverPoint,
 }: {
   active?: boolean;
   payload?: any[];
   climbs: ClimbSegmentData[];
+  downhills?: DescentSegmentData[];
   allTrackPoints: TrackPoint[];
   onHoverPoint?: (point: TrackPoint | null) => void;
 }) {
@@ -84,6 +87,11 @@ function CustomTooltip({
   );
   const activeClimb = inClimbIndex >= 0 ? climbs[inClimbIndex] : null;
 
+  const inDownhillIndex = downhills.findIndex(
+    (d) => exactPt.km >= d.start_km && exactPt.km <= d.end_km
+  );
+  const activeDownhill = inDownhillIndex >= 0 ? downhills[inDownhillIndex] : null;
+
   return (
     <div className="bg-bg/95 backdrop-blur-md border border-border p-2.5 rounded-lg shadow-xl text-xs space-y-1 z-50 pointer-events-none">
       <div className="font-semibold text-text flex items-center justify-between gap-3">
@@ -105,6 +113,18 @@ function CustomTooltip({
           </div>
         </div>
       )}
+
+      {activeDownhill && !activeClimb && (
+        <div className="pt-1 mt-1 border-t border-border/60 text-[11px] text-blue-400">
+          <div className="font-bold flex items-center justify-between gap-2">
+            <span>ABFAHRT</span>
+            <span>Ø {activeDownhill.avg_grade_pct}%</span>
+          </div>
+          <div className="text-text-muted text-[10px]">
+            km {activeDownhill.start_km} – {activeDownhill.end_km} (-{Math.round(activeDownhill.elevation_loss_m)} hm)
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -112,6 +132,7 @@ function CustomTooltip({
 export default function ElevationProfile({
   trackPoints,
   climbs,
+  downhills = [],
   activeClimbIndex,
   onClimbClick,
   onHoverPoint,
@@ -180,6 +201,11 @@ export default function ElevationProfile({
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Cat 4
           </span>
+          {downhills.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Abfahrt
+            </span>
+          )}
         </div>
       </div>
 
@@ -225,8 +251,26 @@ export default function ElevationProfile({
             />
 
             <Tooltip
-              content={<CustomTooltip climbs={climbs} allTrackPoints={trackPoints} onHoverPoint={onHoverPoint} />}
+              content={<CustomTooltip climbs={climbs} downhills={downhills} allTrackPoints={trackPoints} onHoverPoint={onHoverPoint} />}
             />
+
+            {/* Render downhill segment reference areas */}
+            {downhills.map((downhill, idx) => (
+              <ReferenceArea
+                key={`downhill-${idx}`}
+                x1={downhill.start_km}
+                x2={downhill.end_km}
+                y1={minEle}
+                y2={maxEle}
+                fill="#3b82f6"
+                fillOpacity={0.12}
+                stroke="#3b82f6"
+                strokeOpacity={0.4}
+                strokeWidth={1}
+                strokeDasharray="2 2"
+                style={{ pointerEvents: "none" }}
+              />
+            ))}
 
             {/* Render climb segment reference areas */}
             {climbs.map((climb, idx) => {
@@ -235,7 +279,7 @@ export default function ElevationProfile({
 
               return (
                 <ReferenceArea
-                  key={idx}
+                  key={`climb-${idx}`}
                   x1={climb.start_km}
                   x2={climb.end_km}
                   y1={minEle}

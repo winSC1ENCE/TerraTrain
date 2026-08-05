@@ -333,9 +333,6 @@ export default function WeeklyPlannerPage() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
-  // Persisted plan details
-  const [generatedPlan, setGeneratedPlan] = useState<WeeklyPlan | null>(null);
-
   // Tab & search states
   const [activeTab, setActiveTab] = useState<"new" | "history">("new");
   const [searchQuery, setSearchQuery] = useState("");
@@ -778,15 +775,15 @@ export default function WeeklyPlannerPage() {
               </div>
               <div className="flex gap-2">
                 {showForm ? (
-                  <Button size="xs" variant="primary" onClick={() => setShowForm(false)}>
+                  <Button size="sm" variant="primary" onClick={() => setShowForm(false)}>
                     <FileText className="h-3.5 w-3.5 mr-1" /> Plan anzeigen
                   </Button>
                 ) : (
-                  <Button size="xs" variant="outline" onClick={() => setShowForm(true)}>
+                  <Button size="sm" variant="secondary" onClick={() => setShowForm(true)}>
                     <Pencil className="h-3.5 w-3.5 mr-1" /> Formular / Bearbeiten
                   </Button>
                 )}
-                <Button size="xs" variant="secondary" onClick={resetDraftForm}>
+                <Button size="sm" variant="secondary" onClick={resetDraftForm}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" /> Neuen Plan beginnen
                 </Button>
               </div>
@@ -805,7 +802,7 @@ export default function WeeklyPlannerPage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      size="xs"
+                      size="sm"
                       onClick={resetDraftForm}
                       title="Entwurf zurücksetzen"
                     >
@@ -819,19 +816,19 @@ export default function WeeklyPlannerPage() {
                       <div className="flex gap-2">
                         <Button
                           type="button"
-                          size="xs"
-                          variant={startDate === getMonday() ? "primary" : "outline"}
+                          size="sm"
+                          variant={startDate === getMonday() ? "primary" : "secondary"}
                           onClick={() => setStartDate(getMonday())}
                         >
                           Diese Woche ({formatWeekRange(getMonday()).shortLabel})
                         </Button>
                         <Button
                           type="button"
-                          size="xs"
+                          size="sm"
                           variant={
                             startDate === getMonday(new Date(Date.now() + 7 * 86400000))
                               ? "primary"
-                              : "outline"
+                              : "secondary"
                           }
                           onClick={() =>
                             setStartDate(getMonday(new Date(Date.now() + 7 * 86400000)))
@@ -1390,7 +1387,7 @@ export default function WeeklyPlannerPage() {
               })()}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

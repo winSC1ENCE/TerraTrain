@@ -19,6 +19,11 @@ class GpxAnalyzer:
     MIN_CLIMB_LENGTH_M = 300  # minimum sustained length
     HYSTERESIS_M = 50  # how far below threshold before climb ends
 
+    # Downhill detection thresholds
+    MIN_DOWNHILL_GRADE_PCT = -2.0  # minimum negative gradient to start a downhill segment
+    MIN_DOWNHILL_LENGTH_M = 200  # minimum sustained descent length
+    MIN_ELEVATION_LOSS_M = 15.0  # minimum elevation loss
+
     @staticmethod
     def analyze(gpx_xml: str) -> dict:
         """Parse GPX XML and return a dict matching Route ORM fields."""
@@ -54,6 +59,7 @@ class GpxAnalyzer:
         gain = float(df.filter(pl.col("delta_ele") > 0)["delta_ele"].sum())
         loss = float(df.filter(pl.col("delta_ele") < 0)["delta_ele"].abs().sum())
         climbs = GpxAnalyzer._detect_climbs(df)
+        downhills = GpxAnalyzer._detect_downhills(df)
         terrain_score = GpxAnalyzer._compute_terrain_score(gain, distance_m, climbs)
 
         # Downsample points for lightweight map rendering (max 300 points)
@@ -76,13 +82,17 @@ class GpxAnalyzer:
             "max_elevation_m": float(df["ele"].max()),
             "min_elevation_m": float(df["ele"].min()),
             "climb_profile": climbs,
+            "downhill_profile": downhills,
             "terrain_score": terrain_score,
             "analysis": {
                 "point_count": len(points),
                 "avg_grade_pct": float(df["grade_pct"].abs().mean()) if distance_m > 0 else 0.0,
                 "distance_km": round(distance_m / 1000, 2),
                 "elevation_gain_m": round(gain, 1),
+                "elevation_loss_m": round(loss, 1),
                 "climb_count": len(climbs),
+                "downhill_count": len(downhills),
+                "downhill_profile": downhills,
                 "track_points": track_points,
             },
         }
@@ -228,6 +238,75 @@ class GpxAnalyzer:
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     @staticmethod
+    def _detect_downhills(df: pl.DataFrame) -> list[dict]:
+        grades = df["grade_pct"].to_list()
+        cumulative = df["cumulative_m"].to_list()
+        eles = df["ele"].to_list()
+
+        downhills: list[dict] = []
+        in_downhill = False
+        start_idx = 0
+        above_threshold_m = 0.0
+
+        for i in range(1, len(grades)):
+            grade = grades[i]
+            segment_len = cumulative[i] - cumulative[i - 1]
+
+            if not in_downhill:
+                if grade <= GpxAnalyzer.MIN_DOWNHILL_GRADE_PCT:
+                    in_downhill = True
+                    start_idx = i
+                    above_threshold_m = 0.0
+            else:
+                if grade > GpxAnalyzer.MIN_DOWNHILL_GRADE_PCT:
+                    above_threshold_m += segment_len
+                    if above_threshold_m >= GpxAnalyzer.HYSTERESIS_M:
+                        end_idx = i
+                        downhill = GpxAnalyzer._build_downhill(df, start_idx, end_idx, cumulative, eles)
+                        if (
+                            downhill["length_m"] >= GpxAnalyzer.MIN_DOWNHILL_LENGTH_M
+                            and downhill["elevation_loss_m"] >= GpxAnalyzer.MIN_ELEVATION_LOSS_M
+                        ):
+                            downhills.append(downhill)
+                        in_downhill = False
+                else:
+                    above_threshold_m = 0.0
+
+        if in_downhill:
+            downhill = GpxAnalyzer._build_downhill(df, start_idx, len(grades) - 1, cumulative, eles)
+            if (
+                downhill["length_m"] >= GpxAnalyzer.MIN_DOWNHILL_LENGTH_M
+                and downhill["elevation_loss_m"] >= GpxAnalyzer.MIN_ELEVATION_LOSS_M
+            ):
+                downhills.append(downhill)
+
+        return downhills
+
+    @staticmethod
+    def _build_downhill(
+        df: pl.DataFrame,
+        start_idx: int,
+        end_idx: int,
+        cumulative: list[float],
+        eles: list[float],
+    ) -> dict:
+        length_m = cumulative[end_idx] - cumulative[start_idx]
+        ele_loss = max(0.0, eles[start_idx] - eles[end_idx])
+        avg_grade = (-ele_loss / length_m * 100) if length_m > 0 else 0.0
+
+        grades_slice = df["grade_pct"].slice(start_idx, end_idx - start_idx).to_list()
+        min_grade = min(grades_slice) if grades_slice else 0.0
+
+        return {
+            "start_km": round(cumulative[start_idx] / 1000, 2),
+            "end_km": round(cumulative[end_idx] / 1000, 2),
+            "length_m": round(length_m, 0),
+            "elevation_loss_m": round(ele_loss, 1),
+            "avg_grade_pct": round(avg_grade, 1),
+            "min_grade_pct": round(min_grade, 1),
+        }
+
+    @staticmethod
     def _empty_result() -> dict:
         return {
             "distance_m": 0.0,
@@ -236,6 +315,7 @@ class GpxAnalyzer:
             "max_elevation_m": None,
             "min_elevation_m": None,
             "climb_profile": [],
+            "downhill_profile": [],
             "terrain_score": 0.0,
             "analysis": {},
         }

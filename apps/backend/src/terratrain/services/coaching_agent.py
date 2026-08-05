@@ -204,6 +204,9 @@ class CoachingAgent:
         auto_push: bool = False,
         provider: str | None = None,
         press_lap: bool = False,
+        load_policy: str = "target",
+        weekly_plan_id: Any | None = None,
+        source_workout_id: Any | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         yield {"event": "thinking", "data": "Gathering athlete context..."}
 
@@ -214,10 +217,47 @@ class CoachingAgent:
         pmc = await self._get_pmc(athlete)
         rag_chunks = await self._rag.retrieve(f"{workout_type} training prescription", top_k=5)
 
+        weekly_plan_context = None
+        if weekly_plan_id:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+            from terratrain.db.models.weekly_plan import WeeklyPlan
+
+            stmt = select(WeeklyPlan).options(selectinload(WeeklyPlan.workouts)).where(WeeklyPlan.id == weekly_plan_id)
+            res = await self._session.execute(stmt)
+            wp = res.scalar_one_or_none()
+            if wp and wp.athlete_id == athlete.id:
+                other_workouts = [
+                    {
+                        "name": w.name,
+                        "sport": w.sport,
+                        "scheduled_date": str(w.scheduled_date) if w.scheduled_date else None,
+                        "target_tss": w.target_tss,
+                        "duration_min": round(w.duration_seconds / 60) if w.duration_seconds else None,
+                    }
+                    for w in wp.workouts
+                    if not source_workout_id or w.id != source_workout_id
+                ]
+                weekly_plan_context = {
+                    "week_type": wp.week_type,
+                    "target_tss": wp.target_tss,
+                    "start_date": str(wp.start_date),
+                    "other_workouts": other_workouts,
+                }
+
         yield {"event": "thinking", "data": "Analyzing route terrain..."}
 
         context = self._build_context(
-            athlete, pmc, route, rag_chunks, workout_type, notes, sport=active_sport, aggressiveness=aggressiveness
+            athlete,
+            pmc,
+            route,
+            rag_chunks,
+            workout_type,
+            notes,
+            sport=active_sport,
+            aggressiveness=aggressiveness,
+            load_policy=load_policy,
+            weekly_plan_context=weekly_plan_context,
         )
         system_prompt = self._build_system_prompt(context)
 
@@ -352,6 +392,8 @@ class CoachingAgent:
             structured_text=structured_text,
             scheduled_date=scheduled_date,
             press_lap=press_lap,
+            weekly_plan_id=weekly_plan_id,
+            source_workout_id=source_workout_id,
         )
 
         if auto_push and athlete.intervals_api_key_encrypted:
@@ -403,6 +445,8 @@ class CoachingAgent:
         notes: str | None,
         sport: str | None = None,
         aggressiveness: int = 0,
+        load_policy: str = "target",
+        weekly_plan_context: dict | None = None,
     ) -> dict:
         context: dict = {
             "athlete": {
@@ -418,6 +462,8 @@ class CoachingAgent:
             "pmc": pmc,
             "workout_type": workout_type,
             "aggressiveness": aggressiveness,
+            "load_policy": load_policy,
+            "weekly_plan_context": weekly_plan_context,
             "notes": notes,
             "rag_context": [c["content"] for c in rag_chunks[:5]],
         }
@@ -558,6 +604,14 @@ app derives the athlete's actual pace/HR target from their own thresholds.
         else:
             agg_guide = "BALANCED / STANDARD (0): Standard baseline target load and interval prescription."
 
+        load_policy = ctx.get("load_policy", "target")
+        if load_policy == "allow_exceed":
+            load_policy_str = "ALLOW EXCEEDING TARGET LOAD: You may prescribe higher TSS/intensity beyond baseline target day/week loads."
+        elif load_policy == "allow_fall_below":
+            load_policy_str = "ALLOW FALLING BELOW TARGET LOAD: Prescribe lower TSS/intensity below baseline targets for recovery/deload."
+        else:
+            load_policy_str = "BALANCED / TARGET LOAD: Strictly align with baseline day/week training load targets."
+
         prompt = f"""You are TerraTrain, an expert {self._sport_label(sport)} coach.
 
 ## Athlete Profile
@@ -572,7 +626,18 @@ Weekly TSS: {pmc["weekly_tss"]}
 ## Requested Workout
 Type: {ctx["workout_type"]}
 Training Load Aggressiveness: {agg_guide}
+Load Policy Directive: {load_policy_str}
 Notes: {ctx.get("notes") or "none"}
+"""
+
+        if ctx.get("weekly_plan_context"):
+            wp_ctx = ctx["weekly_plan_context"]
+            prompt += f"""
+## Parent Weekly Plan Context
+Week Type: {wp_ctx["week_type"]}
+Week Target TSS: {wp_ctx["target_tss"]}
+Start Date: {wp_ctx["start_date"]}
+Other Planned Workouts in Week: {json.dumps(wp_ctx["other_workouts"])}
 """
 
         if "route" in ctx:
@@ -811,6 +876,8 @@ When ready, call final_answer with the complete workout plan.
         structured_text: str,
         scheduled_date: date | None,
         press_lap: bool = False,
+        weekly_plan_id: Any | None = None,
+        source_workout_id: Any | None = None,
     ) -> Workout:
         # weight_training plans have no `phases` (they use `exercises` instead,
         # which carry no per-set duration estimate) — duration is unknown.
@@ -819,8 +886,31 @@ When ready, call final_answer with the complete workout plan.
             total_min = sum(p.duration_min * max(1, p.repeat) for p in plan.phases)
             duration_seconds = int(total_min * 60)
 
+        if source_workout_id:
+            workout = await self._session.get(Workout, source_workout_id)
+            if workout and workout.athlete_id == athlete.id:
+                workout.route_id = route.id if route else None
+                workout.name = plan.name
+                workout.sport = plan.sport
+                workout.workout_type = plan.workout_type
+                if scheduled_date:
+                    workout.scheduled_date = scheduled_date
+                workout.duration_seconds = duration_seconds
+                workout.target_tss = plan.target_tss
+                workout.structured_text = structured_text
+                workout.press_lap = press_lap
+                workout.llm_plan = plan.model_dump()
+                workout.llm_reasoning = plan.rationale
+                workout.coach_notes = plan.coach_notes
+                if weekly_plan_id:
+                    workout.weekly_plan_id = weekly_plan_id
+                await self._session.commit()
+                await self._session.refresh(workout)
+                return workout
+
         workout = Workout(
             athlete_id=athlete.id,
+            weekly_plan_id=weekly_plan_id,
             route_id=route.id if route else None,
             name=plan.name,
             sport=plan.sport,

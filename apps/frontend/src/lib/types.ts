@@ -75,6 +75,9 @@ export interface CoachingRequest {
   auto_push?: boolean;
   provider?: string;
   press_lap?: boolean;
+  load_policy?: "target" | "allow_exceed" | "allow_fall_below";
+  weekly_plan_id?: string;
+  source_workout_id?: string;
 }
 
 export interface Workout {

@@ -16,6 +16,9 @@ class CoachingRequest(BaseModel):
     auto_push: bool = False
     provider: str | None = None
     press_lap: bool = False
+    load_policy: str = Field(default="target", pattern="^(target|allow_exceed|allow_fall_below)$")
+    weekly_plan_id: uuid.UUID | None = None
+    source_workout_id: uuid.UUID | None = None
 
 
 class CoachingSSEEvent(BaseModel):

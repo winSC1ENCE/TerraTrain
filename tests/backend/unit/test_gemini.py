@@ -63,7 +63,7 @@ async def test_rag_service_embed_gemini(monkeypatch):
     req = mock_route.calls.last.request
     assert req.headers["authorization"] == "Bearer test_key"
     payload = json.loads(req.read())
-    assert payload["model"] == "models/gemini-embedding-001"
+    assert payload["model"] == "text-embedding-004"
     assert payload["input"] == "test query"
     assert payload["dimensions"] == 768
 
@@ -89,7 +89,7 @@ async def test_pdf_ingestor_embed_batch_gemini(monkeypatch):
 
     payload = json.loads(mock_route.calls.last.request.read())
     assert payload["input"] == ["chunk1", "chunk2"]
-    assert payload["model"] == "models/gemini-embedding-001"
+    assert payload["model"] == "text-embedding-004"
     assert payload["dimensions"] == 768
 
 

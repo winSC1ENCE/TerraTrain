@@ -258,15 +258,15 @@ export default function WorkoutsPage() {
                   )}
 
                   <div className="mt-3 flex gap-2">
-                    {w.status === "draft" && w.structured_text && (
+                    {w.structured_text && (
                       <Button
                         size="sm"
-                        variant="secondary"
+                        variant={w.status === "pushed" ? "ghost" : "secondary"}
                         loading={pushMutation.isPending && pushMutation.variables === w.id}
                         onClick={() => pushMutation.mutate(w.id)}
                       >
                         <Send className="h-3.5 w-3.5" />
-                        {t.workouts.push}
+                        {w.status === "pushed" ? "Erneut senden" : t.workouts.push}
                       </Button>
                     )}
                     <Button

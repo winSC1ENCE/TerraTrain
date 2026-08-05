@@ -240,7 +240,7 @@ class CoachingAgent:
                 ]
                 weekly_plan_context = {
                     "week_type": wp.week_type,
-                    "target_tss": wp.target_tss,
+                    "target_tss": round(sum(w.target_tss or 0.0 for w in wp.workouts), 1),
                     "start_date": str(wp.start_date),
                     "other_workouts": other_workouts,
                 }
@@ -904,6 +904,7 @@ When ready, call final_answer with the complete workout plan.
                 workout.coach_notes = plan.coach_notes
                 if weekly_plan_id:
                     workout.weekly_plan_id = weekly_plan_id
+                workout.status = "draft"
                 await self._session.commit()
                 await self._session.refresh(workout)
                 return workout

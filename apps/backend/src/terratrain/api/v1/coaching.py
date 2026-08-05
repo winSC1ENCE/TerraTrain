@@ -28,6 +28,19 @@ async def generate_workout(
             # 404 (not 403) so a foreign id doesn't confirm the resource exists.
             raise HTTPException(status_code=404, detail="Route not found")
 
+    if body.weekly_plan_id and body.scheduled_date:
+        from datetime import timedelta
+        from terratrain.db.models.weekly_plan import WeeklyPlan
+
+        wp = await session.get(WeeklyPlan, body.weekly_plan_id)
+        if wp and wp.athlete_id == athlete.id:
+            end_date = wp.start_date + timedelta(days=6)
+            if not (wp.start_date <= body.scheduled_date <= end_date):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Scheduled date must be within the weekly plan ({wp.start_date} to {end_date})",
+                )
+
     agent = CoachingAgent(session=session)
 
     async def event_stream() -> object:

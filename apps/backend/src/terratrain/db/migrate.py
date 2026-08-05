@@ -23,6 +23,8 @@ def apply_migrations() -> None:
     logger.info("alembic.apply_migrations.start", ini_path=str(ini_path))
     try:
         alembic_cfg = Config(str(ini_path))
+        script_dir = ini_path.parent / "alembic"
+        alembic_cfg.set_main_option("script_location", str(script_dir))
         command.upgrade(alembic_cfg, "head")
         logger.info("alembic.apply_migrations.complete")
     except Exception as exc:

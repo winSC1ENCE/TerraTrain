@@ -44,12 +44,21 @@ async def upload_route(
 def _ensure_track_points(route: Route) -> Route:
     if not isinstance(route.analysis, dict):
         route.analysis = {}
-    if "track_points" not in route.analysis and route.gpx_data:
+    
+    needs_analysis = route.gpx_data and (
+        "track_points" not in route.analysis or not getattr(route, "downhill_profile", None)
+    )
+
+    if needs_analysis:
         try:
             an = GpxAnalyzer.analyze(route.gpx_data)
-            route.analysis["track_points"] = an.get("analysis", {}).get("track_points", [])
+            if "track_points" not in route.analysis:
+                route.analysis["track_points"] = an.get("analysis", {}).get("track_points", [])
+            if not getattr(route, "downhill_profile", None) and an.get("downhill_profile"):
+                route.downhill_profile = an["downhill_profile"]
         except Exception:
-            route.analysis["track_points"] = []
+            if "track_points" not in route.analysis:
+                route.analysis["track_points"] = []
     return route
 
 

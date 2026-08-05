@@ -83,3 +83,43 @@ def test_coaching_agent_build_context_standalone_session():
     assert "BALANCED / TARGET LOAD" in prompt
     assert "Parent Weekly Plan Context" not in prompt
 
+
+@pytest.mark.asyncio
+async def test_coaching_generate_date_validation_outside_weekly_plan():
+    import uuid
+    from datetime import date
+    from unittest.mock import AsyncMock
+    from fastapi import HTTPException
+    from terratrain.api.v1.coaching import generate_workout
+    from terratrain.schemas.coaching import CoachingRequest
+    from terratrain.db.models.weekly_plan import WeeklyPlan
+
+    athlete_id = uuid.uuid4()
+    plan_id = uuid.uuid4()
+
+    athlete = MagicMock()
+    athlete.id = athlete_id
+
+    wp = MagicMock(spec=WeeklyPlan)
+    wp.id = plan_id
+    wp.athlete_id = athlete_id
+    wp.start_date = date(2026, 8, 3)  # Monday
+
+    session = AsyncMock()
+    session.get.return_value = wp
+
+    # Request date is outside Monday 2026-08-03 .. Sunday 2026-08-09
+    body = CoachingRequest(
+        workout_type="threshold",
+        weekly_plan_id=plan_id,
+        scheduled_date=date(2026, 8, 15),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await generate_workout(body=body, athlete=athlete, session=session)
+
+    assert exc_info.value.status_code == 400
+    assert "Scheduled date must be within the weekly plan" in exc_info.value.detail
+
+
+

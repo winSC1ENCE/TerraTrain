@@ -366,6 +366,7 @@ export default function WeeklyPlannerPage() {
     }
   };
   const [pushingAll, setPushingAll] = useState(false);
+  const [pushingSingleId, setPushingSingleId] = useState<string | null>(null);
 
   // Fetch routes
   const { data: routes } = useQuery({
@@ -591,6 +592,7 @@ export default function WeeklyPlannerPage() {
   }
 
   async function handlePushSingle(workoutId: string) {
+    setPushingSingleId(workoutId);
     try {
       await api.workouts.push(workoutId);
       if (generatedPlan) {
@@ -600,6 +602,8 @@ export default function WeeklyPlannerPage() {
       }
     } catch (err) {
       alert((err as Error).message);
+    } finally {
+      setPushingSingleId(null);
     }
   }
 
@@ -1278,7 +1282,22 @@ export default function WeeklyPlannerPage() {
                                         </div>
                                       </div>
 
-                                      <div className="flex items-center gap-3">
+                                      <div className="flex items-center gap-2">
+                                        {workout.structured_text && !isPast && (
+                                          <Button
+                                            size="sm"
+                                            variant={workout.status === "pushed" ? "ghost" : "secondary"}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handlePushSingle(workout.id);
+                                            }}
+                                            loading={pushingSingleId === workout.id}
+                                            title={workout.status === "pushed" ? "Erneut zu Intervals.icu senden" : "Zu Intervals.icu senden"}
+                                          >
+                                            <Send className="h-3.5 w-3.5 mr-1.5 text-accent" />
+                                            {workout.status === "pushed" ? "Erneut senden" : "Senden"}
+                                          </Button>
+                                        )}
                                         <span
                                           className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                             workout.status === "pushed"
@@ -1379,15 +1398,38 @@ export default function WeeklyPlannerPage() {
                                           <div className="flex gap-2 justify-end border-t border-border/50 pt-4">
                                             {!isPast && (
                                               <>
-                                                <Button size="sm" variant="secondary" onClick={() => handleOpenReplan(workout)}>
+                                                <Button
+                                                  size="sm"
+                                                  variant="secondary"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenReplan(workout);
+                                                  }}
+                                                >
                                                   <RefreshCw className="h-3.5 w-3.5 mr-1.5 text-accent" /> Mit AI neu planen
                                                 </Button>
-                                                <Button size="sm" variant="secondary" onClick={() => startEditWorkout(workout)}>
+                                                <Button
+                                                  size="sm"
+                                                  variant="secondary"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    startEditWorkout(workout);
+                                                  }}
+                                                >
                                                   <Pencil className="h-3.5 w-3.5 mr-1.5" /> Bearbeiten
                                                 </Button>
-                                                {workout.status !== "pushed" && (
-                                                  <Button size="sm" onClick={() => handlePushSingle(workout.id)}>
-                                                    <Send className="h-3.5 w-3.5 mr-1.5" /> Zu Intervals.icu senden
+                                                {workout.structured_text && (
+                                                  <Button
+                                                    size="sm"
+                                                    variant={workout.status === "pushed" ? "secondary" : "primary"}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handlePushSingle(workout.id);
+                                                    }}
+                                                    loading={pushingSingleId === workout.id}
+                                                  >
+                                                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                                                    {workout.status === "pushed" ? "Erneut zu Intervals.icu senden" : "Zu Intervals.icu senden"}
                                                   </Button>
                                                 )}
                                               </>

@@ -1,7 +1,18 @@
+import socket
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _is_host_resolvable(hostname: str) -> bool:
+    if not hostname or hostname in ("localhost", "127.0.0.1", "0.0.0.0"):
+        return True
+    try:
+        socket.gethostbyname(hostname)
+        return True
+    except socket.gaierror:
+        return False
 
 
 class Settings(BaseSettings):
@@ -15,6 +26,9 @@ class Settings(BaseSettings):
     cors_origin_regex: str = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
 
     # Database
+    postgres_user: str = "terratrain"
+    postgres_password: str = ""
+    postgres_db: str = "terratrain"
     database_url: str = Field(
         default="postgresql+asyncpg://terratrain:terratrain@localhost:5432/terratrain"
     )
@@ -23,6 +37,24 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
+
+    @model_validator(mode="after")
+    def fallback_unresolvable_hosts(self) -> "Settings":
+        if self.postgres_password and "://" in self.database_url and "@" in self.database_url:
+            scheme, rest = self.database_url.split("://", 1)
+            user_pass, host_db = rest.split("@", 1)
+            if ":" in user_pass:
+                u, p = user_pass.split(":", 1)
+                if p == "terratrain" and self.postgres_password != "terratrain":
+                    self.database_url = f"{scheme}://{u}:{self.postgres_password}@{host_db}"
+
+        if "@postgres:" in self.database_url or "@postgres/" in self.database_url:
+            if not _is_host_resolvable("postgres"):
+                self.database_url = self.database_url.replace("@postgres:", "@localhost:").replace("@postgres/", "@localhost/")
+        if "http://ollama:" in self.ollama_base_url or "http://ollama/" in self.ollama_base_url:
+            if not _is_host_resolvable("ollama"):
+                self.ollama_base_url = self.ollama_base_url.replace("http://ollama:", "http://localhost:").replace("http://ollama/", "http://localhost/")
+        return self
     ollama_chat_model: str = "qwen2.5:14b"
     ollama_embed_model: str = "nomic-embed-text"
     ollama_request_timeout: int = 180

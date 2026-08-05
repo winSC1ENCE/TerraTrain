@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, Sparkles, X, AlertCircle, Calendar, Zap, CheckCircle2 } from "lucide-react";
+import { RefreshCw, Sparkles, X, AlertCircle, Calendar, Zap, CheckCircle2, Send } from "lucide-react";
 
 import { api, API_BASE, csrfHeaders } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
@@ -54,6 +54,32 @@ export function ReplanWorkoutModal({
   const [phases, setPhases] = useState<WorkoutPhase[] | undefined>();
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
+  const [isPushingResult, setIsPushingResult] = useState(false);
+  const [resultPushed, setResultPushed] = useState(false);
+
+  async function handlePushResult() {
+    if (!replannedResult) return;
+    setIsPushingResult(true);
+    try {
+      const updated = await api.workouts.push(replannedResult.id);
+      setReplannedResult(updated);
+      setResultPushed(true);
+      onSuccess();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setIsPushingResult(false);
+    }
+  }
+
+  const minDate = weeklyPlan?.start_date ? String(weeklyPlan.start_date).split("T")[0] : undefined;
+  const maxDate = useMemo(() => {
+    if (!weeklyPlan?.start_date) return undefined;
+    const d = new Date(weeklyPlan.start_date);
+    d.setDate(d.getDate() + 6);
+    return d.toISOString().split("T")[0];
+  }, [weeklyPlan?.start_date]);
+
   const { data: routes } = useQuery({
     queryKey: ["routes", athlete?.id],
     queryFn: () => api.routes.list(),
@@ -67,7 +93,7 @@ export function ReplanWorkoutModal({
       setSport(workout.sport || athlete?.sport || "cycling");
       setLoadPolicy("target"); // Standard is target load
       setAggressiveness(0);
-      setScheduledDate(workout.scheduled_date ? String(workout.scheduled_date) : "");
+      setScheduledDate(workout.scheduled_date ? String(workout.scheduled_date).split("T")[0] : "");
       setRouteId(workout.route_id || "");
       setNotes(workout.coach_notes || "");
       setPressLap(workout.press_lap ?? false);
@@ -83,6 +109,13 @@ export function ReplanWorkoutModal({
   async function handleReplan(e: React.FormEvent) {
     e.preventDefault();
     if (!athlete || !workout || !weeklyPlan) return;
+
+    if (scheduledDate && minDate && maxDate) {
+      if (scheduledDate < minDate || scheduledDate > maxDate) {
+        setStreamError(`Das Datum muss innerhalb der gewählten Woche liegen (${minDate} bis ${maxDate}).`);
+        return;
+      }
+    }
 
     abortController?.abort();
     const controller = new AbortController();
@@ -108,7 +141,7 @@ export function ReplanWorkoutModal({
     };
 
     try {
-      let res = await fetch(`${API_BASE}/coach/generate`, {
+      let res = await fetch(`${API_BASE}/coaching/generate`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...csrfHeaders() },
@@ -119,7 +152,7 @@ export function ReplanWorkoutModal({
       if (res.status === 401) {
         const refreshed = await api.auth.refresh().then(() => true).catch(() => false);
         if (refreshed) {
-          res = await fetch(`${API_BASE}/coach/generate`, {
+          res = await fetch(`${API_BASE}/coaching/generate`, {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json", ...csrfHeaders() },
@@ -294,12 +327,21 @@ export function ReplanWorkoutModal({
                 <option value="gemini">{t.coach.providers.gemini}</option>
               </Select>
 
-              <Input
-                label={t.coach.date}
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-              />
+              <div>
+                <Input
+                  label={t.coach.date}
+                  type="date"
+                  min={minDate}
+                  max={maxDate}
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                />
+                {minDate && maxDate && (
+                  <p className="text-[11px] text-text-muted mt-1">
+                    Gültiger Zeitraum: {minDate} bis {maxDate}
+                  </p>
+                )}
+              </div>
             </div>
 
             {routes && routes.length > 0 && (
@@ -377,9 +419,22 @@ export function ReplanWorkoutModal({
                   <CheckCircle2 className="h-4.5 w-4.5" />
                   <span>Einzeltraining erfolgreich im Wochenplan aktualisiert!</span>
                 </div>
-                <Button size="sm" variant="primary" onClick={onClose}>
-                  Fertig
-                </Button>
+                <div className="flex items-center gap-2">
+                  {athlete && (
+                    <Button
+                      size="sm"
+                      variant={resultPushed || replannedResult.status === "pushed" ? "secondary" : "primary"}
+                      loading={isPushingResult}
+                      onClick={handlePushResult}
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1" />
+                      {resultPushed || replannedResult.status === "pushed" ? "Erneut senden" : "Zu Intervals.icu senden"}
+                    </Button>
+                  )}
+                  <Button size="sm" variant={resultPushed || !athlete ? "primary" : "secondary"} onClick={onClose}>
+                    Fertig
+                  </Button>
+                </div>
               </div>
 
               <div className="text-xs text-text space-y-2 pt-1 border-t border-accent/20">

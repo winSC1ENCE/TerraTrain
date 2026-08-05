@@ -114,6 +114,15 @@ export interface ClimbSegment {
   category?: string | null;
 }
 
+export interface DescentSegment {
+  start_km: number;
+  end_km: number;
+  avg_grade_pct: number;
+  min_grade_pct: number;
+  length_m: number;
+  elevation_loss_m: number;
+}
+
 export interface TrackPoint {
   lat: number;
   lon: number;
@@ -135,11 +144,13 @@ export interface Route {
   max_elevation_m?: number | null;
   min_elevation_m?: number | null;
   climb_profile: ClimbSegment[];
+  downhill_profile?: DescentSegment[];
   terrain_score?: number | null;
   created_at?: string;
   analysis?: {
     track_points?: TrackPoint[];
     climbs?: ClimbSegment[];
+    downhills?: DescentSegment[];
     [key: string]: any;
   } | null;
 }

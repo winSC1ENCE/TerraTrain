@@ -8,6 +8,7 @@ import { api, API_BASE, csrfHeaders } from "@/lib/api";
 import { useAthlete } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
 import type { Route, Sport, WeeklyPlan, Workout, WorkoutPhase } from "@/lib/types";
+import type { CoachEvent } from "@/hooks/useCoachStream";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -47,7 +48,7 @@ export function ReplanWorkoutModal({
   const [pressLap, setPressLap] = useState<boolean>(false);
 
   const [isStreaming, setIsStreaming] = useState(false);
-  const [events, setEvents] = useState<Array<{ kind: string; text: string }>>([]);
+  const [events, setEvents] = useState<CoachEvent[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [replannedResult, setReplannedResult] = useState<Workout | null>(null);
   const [phases, setPhases] = useState<WorkoutPhase[] | undefined>();

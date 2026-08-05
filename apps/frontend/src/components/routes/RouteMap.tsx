@@ -37,8 +37,10 @@ interface RouteMapProps {
   climbs: ClimbSegmentData[];
   downhills?: DescentSegmentData[];
   activeClimbIndex?: number | null;
+  activeDescentIndex?: number | null;
   hoveredPoint?: TrackPoint | null;
   onClimbClick?: (index: number) => void;
+  onDescentClick?: (index: number) => void;
 }
 
 function getCategoryColor(category?: string | null): string {
@@ -52,13 +54,17 @@ function getCategoryColor(category?: string | null): string {
 export default function RouteMap({
   trackPoints,
   climbs,
+  downhills = [],
   activeClimbIndex,
+  activeDescentIndex,
   hoveredPoint,
   onClimbClick,
+  onDescentClick,
 }: RouteMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const climbPolylinesRef = useRef<L.Polyline[]>([]);
+  const descentPolylinesRef = useRef<L.Polyline[]>([]);
   const hoverMarkerRef = useRef<L.Marker | null>(null);
 
   useEffect(() => {
@@ -158,7 +164,46 @@ export default function RouteMap({
         .addTo(map);
     }
 
-    // 4. Draw Color-Coded Climb Segments
+    // 4. Draw Color-Coded Downhill Descent Segments (Blue)
+    descentPolylinesRef.current = [];
+    downhills.forEach((downhill, idx) => {
+      const downhillPoints = trackPoints.filter(
+        (pt) => pt.km >= downhill.start_km && pt.km <= downhill.end_km
+      );
+
+      if (downhillPoints.length < 2) return;
+
+      const downhillLatLons: L.LatLngTuple[] = downhillPoints.map((pt) => [pt.lat, pt.lon]);
+      const isActive = activeDescentIndex === idx;
+
+      const downhillPolyline = L.polyline(downhillLatLons, {
+        color: "#3b82f6", // Bright Blue for descents
+        weight: isActive ? 9 : 7,
+        opacity: isActive ? 1.0 : 0.9,
+      }).addTo(map);
+
+      const tooltipHtml = `
+        <div style="font-family: sans-serif; padding: 2px;">
+          <div style="font-weight: bold; font-size: 12px; color: #3b82f6;">
+            ABFAHRT · km ${downhill.start_km}–${downhill.end_km}
+          </div>
+          <div style="font-size: 11px; color: #333; margin-top: 2px;">
+            <b>Gefälle:</b> Ø ${downhill.avg_grade_pct}% (min ${downhill.min_grade_pct}%)<br/>
+            <b>Höhenverlust:</b> -${Math.round(downhill.elevation_loss_m)} hm<br/>
+            <b>Länge:</b> ${(downhill.length_m / 1000).toFixed(1)} km
+          </div>
+        </div>
+      `;
+
+      downhillPolyline.bindTooltip(tooltipHtml, { sticky: true });
+      downhillPolyline.on("click", () => {
+        if (onDescentClick) onDescentClick(idx);
+      });
+
+      descentPolylinesRef.current[idx] = downhillPolyline;
+    });
+
+    // 5. Draw Color-Coded Climb Segments
     climbPolylinesRef.current = [];
 
     climbs.forEach((climb, idx) => {
@@ -201,19 +246,25 @@ export default function RouteMap({
 
       climbPolylinesRef.current[idx] = climbPolyline;
     });
-  }, [trackPoints, climbs, activeClimbIndex, onClimbClick]);
+  }, [trackPoints, climbs, downhills, activeClimbIndex, activeDescentIndex, onClimbClick, onDescentClick]);
 
-  // Handle active climb highlighting zoom
+  // Handle active climb or descent highlighting zoom
   useEffect(() => {
+    if (!mapRef.current) return;
     if (
       activeClimbIndex != null &&
-      climbPolylinesRef.current[activeClimbIndex] &&
-      mapRef.current
+      climbPolylinesRef.current[activeClimbIndex]
     ) {
       const poly = climbPolylinesRef.current[activeClimbIndex];
       mapRef.current.fitBounds(poly.getBounds(), { padding: [50, 50], maxZoom: 15 });
+    } else if (
+      activeDescentIndex != null &&
+      descentPolylinesRef.current[activeDescentIndex]
+    ) {
+      const poly = descentPolylinesRef.current[activeDescentIndex];
+      mapRef.current.fitBounds(poly.getBounds(), { padding: [50, 50], maxZoom: 15 });
     }
-  }, [activeClimbIndex]);
+  }, [activeClimbIndex, activeDescentIndex]);
 
   // Handle elevation chart hover marker sync & auto-panning on map
   useEffect(() => {

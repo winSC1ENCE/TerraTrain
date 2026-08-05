@@ -17,7 +17,9 @@ interface ElevationProfileProps {
   climbs: ClimbSegmentData[];
   downhills?: DescentSegmentData[];
   activeClimbIndex?: number | null;
+  activeDescentIndex?: number | null;
   onClimbClick?: (index: number) => void;
+  onDescentClick?: (index: number) => void;
   onHoverPoint?: (point: TrackPoint | null) => void;
 }
 
@@ -134,7 +136,9 @@ export default function ElevationProfile({
   climbs,
   downhills = [],
   activeClimbIndex,
+  activeDescentIndex,
   onClimbClick,
+  onDescentClick,
   onHoverPoint,
 }: ElevationProfileProps) {
   // Downsample track points for chart rendering efficiency while preserving high resolution
@@ -255,22 +259,26 @@ export default function ElevationProfile({
             />
 
             {/* Render downhill segment reference areas */}
-            {downhills.map((downhill, idx) => (
-              <ReferenceArea
-                key={`downhill-${idx}`}
-                x1={downhill.start_km}
-                x2={downhill.end_km}
-                y1={minEle}
-                y2={maxEle}
-                fill="#3b82f6"
-                fillOpacity={0.12}
-                stroke="#3b82f6"
-                strokeOpacity={0.4}
-                strokeWidth={1}
-                strokeDasharray="2 2"
-                style={{ pointerEvents: "none" }}
-              />
-            ))}
+            {downhills.map((downhill, idx) => {
+              const isActive = activeDescentIndex === idx;
+              return (
+                <ReferenceArea
+                  key={`downhill-${idx}`}
+                  x1={downhill.start_km}
+                  x2={downhill.end_km}
+                  y1={minEle}
+                  y2={maxEle}
+                  fill="#3b82f6"
+                  fillOpacity={isActive ? 0.35 : 0.12}
+                  stroke="#3b82f6"
+                  strokeOpacity={isActive ? 1.0 : 0.5}
+                  strokeWidth={isActive ? 2 : 1}
+                  strokeDasharray={isActive ? undefined : "2 2"}
+                  style={{ pointerEvents: "none" }}
+                  className="transition-all"
+                />
+              );
+            })}
 
             {/* Render climb segment reference areas */}
             {climbs.map((climb, idx) => {

@@ -99,6 +99,8 @@ export const translations = {
       generating: "Generiere Workout...",
       generate: "Workout generieren",
       stop: "Stoppen",
+      funnyNames: "Lustige Workout-Namen",
+      funnyNamesHint: "Generiert unterhaltsame, humorvolle Titel für Einheiten",
       types: {
         recovery: "Regeneration",
         endurance: "Grundlage",
@@ -344,6 +346,8 @@ export const translations = {
       generating: "Generating Workout...",
       generate: "Generate Workout",
       stop: "Stop",
+      funnyNames: "Funny workout names",
+      funnyNamesHint: "Generates entertaining, humorous titles for sessions",
       types: {
         recovery: "Recovery",
         endurance: "Endurance",

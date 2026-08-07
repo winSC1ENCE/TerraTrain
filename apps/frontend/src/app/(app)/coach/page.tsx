@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useAthlete } from "@/stores/athlete-store";
+import { useAthlete, useAthleteStore } from "@/stores/athlete-store";
 import { useCoachStream } from "@/hooks/useCoachStream";
 import { useT } from "@/lib/i18n";
 import type { Route, Sport, WorkoutPhase } from "@/lib/types";
@@ -19,6 +19,7 @@ import { GpxDropzone } from "@/components/coach/GpxDropzone";
 
 export default function CoachPage() {
   const athlete = useAthlete();
+  const language = useAthleteStore((s) => s.language);
   const t = useT();
   const { events, plan, error, isStreaming, start, stop } = useCoachStream();
 
@@ -31,6 +32,7 @@ export default function CoachPage() {
   const [phases, setPhases] = useState<WorkoutPhase[] | undefined>();
   const [provider, setProvider] = useState("ollama");
   const [pressLap, setPressLap] = useState(false);
+  const [funnyNames, setFunnyNames] = useState(false);
 
   const { data: routes, refetch: refetchRoutes } = useQuery({
     queryKey: ["routes", athlete?.id],
@@ -69,6 +71,8 @@ export default function CoachPage() {
       notes: notes || undefined,
       provider: provider,
       press_lap: pressLap,
+      funny_names: funnyNames,
+      language: language,
     });
   }
 
@@ -164,6 +168,13 @@ export default function CoachPage() {
                 hint={t.workouts.pressLapHint}
                 checked={pressLap}
                 onChange={setPressLap}
+              />
+
+              <Checkbox
+                label={t.coach.funnyNames}
+                hint={t.coach.funnyNamesHint}
+                checked={funnyNames}
+                onChange={setFunnyNames}
               />
 
               <div className="flex gap-2">

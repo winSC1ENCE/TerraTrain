@@ -78,6 +78,8 @@ export interface CoachingRequest {
   load_policy?: "target" | "allow_exceed" | "allow_fall_below";
   weekly_plan_id?: string;
   source_workout_id?: string;
+  funny_names?: boolean;
+  language?: string;
 }
 
 export interface Workout {

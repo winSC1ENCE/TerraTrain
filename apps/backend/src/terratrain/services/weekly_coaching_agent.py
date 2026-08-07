@@ -274,6 +274,8 @@ class WeeklyCoachingAgent(CoachingAgent):
             "aggressiveness": body.aggressiveness,
             "notes": body.notes,
             "schedules": schedules_context,
+            "funny_names": body.funny_names,
+            "language": body.language or "de",
         }
 
         system_prompt = self._build_weekly_system_prompt(ctx)
@@ -570,7 +572,22 @@ Training Load Aggressiveness: {agg_guide}
 
 ## Notes & Constraints
 {notes or "None"}
+"""
 
+        if ctx.get("funny_names"):
+            lang = ctx.get("language") or "de"
+            if lang == "de":
+                prompt += """
+## Workout Title Directive
+FUNNY WORKOUT NAMES ACTIVE: For every session in daily_workouts, create a highly funny, creative, humorous, or sarcastic session name in GERMAN (e.g. 'Laktat-Party auf der Alm', 'Quäl dich, du Sau!', 'Ketten-Killer 3000', 'Sitzfleisch-Prüfung', 'Bein-Brenner Extravaganza'). Do NOT use standard/plain titles like 'Endurance Ride' or 'Threshold 4x8'.
+"""
+            else:
+                prompt += """
+## Workout Title Directive
+FUNNY WORKOUT NAMES ACTIVE: For every session in daily_workouts, create a highly funny, creative, humorous, or witty session name in ENGLISH (e.g. 'Lactic Acid Extravaganza', 'Pain Cave Party', 'Chain Breaker 3000', 'Suffering for Science', 'Legs of Fire'). Do NOT use standard/plain titles like 'Endurance Ride' or 'Threshold 4x8'.
+"""
+
+        prompt += f"""
 ## Instructions
 Design a cohesive weekly training plan for the athlete. You must generate structured workouts for every day requested by the athlete.
 For days not requested by the athlete, do NOT output any workouts for that day (they will be rest days).

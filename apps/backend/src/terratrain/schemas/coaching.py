@@ -19,6 +19,8 @@ class CoachingRequest(BaseModel):
     load_policy: str = Field(default="target", pattern="^(target|allow_exceed|allow_fall_below)$")
     weekly_plan_id: uuid.UUID | None = None
     source_workout_id: uuid.UUID | None = None
+    funny_names: bool = False
+    language: str | None = None
 
 
 class CoachingSSEEvent(BaseModel):

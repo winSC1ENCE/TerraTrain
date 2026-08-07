@@ -58,6 +58,8 @@ async def generate_workout(
             load_policy=body.load_policy,
             weekly_plan_id=body.weekly_plan_id,
             source_workout_id=body.source_workout_id,
+            funny_names=body.funny_names,
+            language=body.language,
         ):
             yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
 

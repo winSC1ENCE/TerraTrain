@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 import { api, API_BASE, csrfHeaders } from "@/lib/api";
-import { useAthlete } from "@/stores/athlete-store";
+import { useAthlete, useAthleteStore } from "@/stores/athlete-store";
 import { useT } from "@/lib/i18n";
 import type { Route, Sport, WeeklyPlan, Workout, WorkoutPhase } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -139,6 +139,7 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
 
 export default function WeeklyPlannerPage() {
   const athlete = useAthlete();
+  const language = useAthleteStore((s) => s.language);
   const t = useT();
 
   const [showForm, setShowForm] = useState(false);
@@ -228,6 +229,18 @@ export default function WeeklyPlannerPage() {
     return false;
   });
 
+  const [funnyNames, setFunnyNames] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const saved = sessionStorage.getItem("terratrain_planner_draft_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.funnyNames === "boolean") return parsed.funnyNames;
+      }
+    } catch {}
+    return false;
+  });
+
   // Day schedules setup
   const [schedules, setSchedules] = useState<ScheduleItem[]>(() => {
     if (typeof window === "undefined") return DEFAULT_SCHEDULES;
@@ -267,13 +280,14 @@ export default function WeeklyPlannerPage() {
         globalNotes,
         provider,
         pressLap,
+        funnyNames,
         schedules,
       };
       sessionStorage.setItem("terratrain_planner_draft_v1", JSON.stringify(draft));
     } catch (e) {
       console.error("Failed to cache planner draft", e);
     }
-  }, [startDate, mesocycleType, weekType, aggressiveness, globalNotes, provider, pressLap, schedules]);
+  }, [startDate, mesocycleType, weekType, aggressiveness, globalNotes, provider, pressLap, funnyNames, schedules]);
 
   // Auto-save active plan to sessionStorage
   useEffect(() => {
@@ -454,6 +468,8 @@ export default function WeeklyPlannerPage() {
       notes: globalNotes || null,
       provider: provider,
       press_lap: pressLap,
+      funny_names: funnyNames,
+      language: language,
     };
 
     try {
@@ -989,6 +1005,13 @@ export default function WeeklyPlannerPage() {
                       hint={t.workouts.pressLapHint}
                       checked={pressLap}
                       onChange={setPressLap}
+                    />
+
+                    <Checkbox
+                      label={t.coach.funnyNames}
+                      hint={t.coach.funnyNamesHint}
+                      checked={funnyNames}
+                      onChange={setFunnyNames}
                     />
 
                     <Button

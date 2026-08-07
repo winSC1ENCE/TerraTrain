@@ -207,6 +207,8 @@ class CoachingAgent:
         load_policy: str = "target",
         weekly_plan_id: Any | None = None,
         source_workout_id: Any | None = None,
+        funny_names: bool = False,
+        language: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         yield {"event": "thinking", "data": "Gathering athlete context..."}
 
@@ -258,6 +260,8 @@ class CoachingAgent:
             aggressiveness=aggressiveness,
             load_policy=load_policy,
             weekly_plan_context=weekly_plan_context,
+            funny_names=funny_names,
+            language=language,
         )
         system_prompt = self._build_system_prompt(context)
 
@@ -447,6 +451,8 @@ class CoachingAgent:
         aggressiveness: int = 0,
         load_policy: str = "target",
         weekly_plan_context: dict | None = None,
+        funny_names: bool = False,
+        language: str | None = None,
     ) -> dict:
         context: dict = {
             "athlete": {
@@ -464,6 +470,8 @@ class CoachingAgent:
             "aggressiveness": aggressiveness,
             "load_policy": load_policy,
             "weekly_plan_context": weekly_plan_context,
+            "funny_names": funny_names,
+            "language": language or "de",
             "notes": notes,
             "rag_context": [c["content"] for c in rag_chunks[:5]],
         }
@@ -628,6 +636,19 @@ Type: {ctx["workout_type"]}
 Training Load Aggressiveness: {agg_guide}
 Load Policy Directive: {load_policy_str}
 Notes: {ctx.get("notes") or "none"}
+"""
+
+        if ctx.get("funny_names"):
+            lang = ctx.get("language") or "de"
+            if lang == "de":
+                prompt += """
+## Workout Title Directive
+FUNNY WORKOUT NAMES ACTIVE: Create a highly funny, creative, humorous, or sarcastic workout/session name in GERMAN (e.g. 'Laktat-Party auf der Alm', 'Quäl dich, du Sau!', 'Ketten-Killer 3000', 'Sitzfleisch-Prüfung', 'Bein-Brenner Extravaganza'). Do NOT use standard/plain titles like 'Threshold 4x8'.
+"""
+            else:
+                prompt += """
+## Workout Title Directive
+FUNNY WORKOUT NAMES ACTIVE: Create a highly funny, creative, humorous, or witty workout/session name in ENGLISH (e.g. 'Lactic Acid Extravaganza', 'Pain Cave Party', 'Chain Breaker 3000', 'Suffering for Science', 'Legs of Fire'). Do NOT use standard/plain titles like 'Threshold 4x8'.
 """
 
         if ctx.get("weekly_plan_context"):

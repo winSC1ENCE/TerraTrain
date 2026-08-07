@@ -24,6 +24,8 @@ class WeeklyPlanCreateRequest(BaseModel):
     notes: str | None = None
     provider: str | None = None
     press_lap: bool = False
+    funny_names: bool = False
+    language: str | None = None
 
 
 class WeeklyPlanResponse(BaseModel):

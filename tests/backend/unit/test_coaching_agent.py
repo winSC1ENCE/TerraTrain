@@ -122,4 +122,103 @@ async def test_coaching_generate_date_validation_outside_weekly_plan():
     assert "Scheduled date must be within the weekly plan" in exc_info.value.detail
 
 
+def test_coaching_agent_funny_names_german():
+    agent = CoachingAgent(session=MagicMock())
+    athlete = MagicMock()
+    athlete.name = "Test Athlete"
+    athlete.sport = "cycling"
+    athlete.ftp_watts = 250
+    athlete.threshold_pace_s_per_m = None
+    athlete.css_pace_s_per_100m = None
+    athlete.weight_kg = 70
+    athlete.lthr = 165
+    athlete.training_zones = None
+
+    pmc = {"ctl": 50, "atl": 60, "tsb": -10, "weekly_tss": 350}
+    context = agent._build_context(
+        athlete=athlete,
+        pmc=pmc,
+        route=None,
+        rag_chunks=[],
+        workout_type="threshold",
+        notes=None,
+        sport="cycling",
+        funny_names=True,
+        language="de",
+    )
+    assert context["funny_names"] is True
+    assert context["language"] == "de"
+
+    prompt = agent._build_system_prompt(context)
+    assert "FUNNY WORKOUT NAMES ACTIVE" in prompt
+    assert "GERMAN" in prompt
+    assert "Laktat-Party" in prompt
+
+
+def test_coaching_agent_funny_names_english():
+    agent = CoachingAgent(session=MagicMock())
+    athlete = MagicMock()
+    athlete.name = "Test Athlete"
+    athlete.sport = "running"
+    athlete.ftp_watts = None
+    athlete.threshold_pace_s_per_m = 240.0
+    athlete.css_pace_s_per_100m = None
+    athlete.weight_kg = 65
+    athlete.lthr = 170
+    athlete.training_zones = None
+
+    pmc = {"ctl": 40, "atl": 45, "tsb": -5, "weekly_tss": 200}
+    context = agent._build_context(
+        athlete=athlete,
+        pmc=pmc,
+        route=None,
+        rag_chunks=[],
+        workout_type="tempo",
+        notes=None,
+        sport="running",
+        funny_names=True,
+        language="en",
+    )
+    assert context["funny_names"] is True
+    assert context["language"] == "en"
+
+    prompt = agent._build_system_prompt(context)
+    assert "FUNNY WORKOUT NAMES ACTIVE" in prompt
+    assert "ENGLISH" in prompt
+    assert "Lactic Acid Extravaganza" in prompt
+
+
+def test_weekly_coaching_agent_funny_names():
+    from terratrain.services.weekly_coaching_agent import WeeklyCoachingAgent
+
+    agent = WeeklyCoachingAgent(session=MagicMock())
+    athlete = {
+        "name": "Test Athlete",
+        "sport": "cycling",
+        "ftp_watts": 250,
+        "threshold_pace_s_per_m": None,
+        "css_pace_s_per_100m": None,
+        "weight_kg": 70,
+        "lthr": 165,
+    }
+    pmc = {"ctl": 50, "atl": 60, "tsb": -10}
+    context = {
+        "athlete": athlete,
+        "pmc": pmc,
+        "history": [],
+        "week_type": "load_1",
+        "mesocycle_type": "3-1",
+        "aggressiveness": 0,
+        "notes": None,
+        "schedules": [],
+        "funny_names": True,
+        "language": "de",
+    }
+    prompt = agent._build_weekly_system_prompt(context)
+    assert "FUNNY WORKOUT NAMES ACTIVE" in prompt
+    assert "GERMAN" in prompt
+    assert "Laktat-Party" in prompt
+
+
+
 

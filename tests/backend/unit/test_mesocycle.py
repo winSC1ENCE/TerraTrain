@@ -116,3 +116,45 @@ async def test_mesocycle_detector_week_selection_past_4_weeks():
     assert res["history"][1]["week_label"] == "KW 29"
     assert res["history"][0]["week_label"] == "KW 28"
 
+
+@pytest.mark.anyio
+async def test_mesocycle_detector_3_1_recovery_in_w3():
+    """Tests user scenario: W-3=43 (recovery), W-2=523 (load 1), W-1=836 (load 2). Recommends load_3."""
+    athlete = Athlete(id=MagicMock(), name="Test Athlete", sport="cycling")
+    session = AsyncMock()
+
+    s4 = MagicMock(spec=TrainingSession)
+    s4.tss = 0.0
+    s3 = MagicMock(spec=TrainingSession)
+    s3.tss = 43.0
+    s2 = MagicMock(spec=TrainingSession)
+    s2.tss = 523.0
+    s1 = MagicMock(spec=TrainingSession)
+    s1.tss = 836.0
+
+    r4 = MagicMock()
+    r4.scalars.return_value.all.return_value = [s4]
+    r3 = MagicMock()
+    r3.scalars.return_value.all.return_value = [s3]
+    r2 = MagicMock()
+    r2.scalars.return_value.all.return_value = [s2]
+    r1 = MagicMock()
+    r1.scalars.return_value.all.return_value = [s1]
+
+    empty_wk = MagicMock()
+    empty_wk.scalars.return_value.all.return_value = []
+
+    session.execute.side_effect = [r4, empty_wk, r3, empty_wk, r2, empty_wk, r1, empty_wk]
+
+    res = await MesocycleDetector.get_tss_history_and_recommendation(
+        athlete=athlete,
+        session=session,
+        start_date=date(2026, 7, 20),
+        mesocycle_type="3-1",
+    )
+
+    assert res["recommended_week_type"] == "load_3"
+    assert "load week 3" in res["reasoning"].lower()
+    assert "recovery week in w-3" in res["reasoning"].lower()
+
+

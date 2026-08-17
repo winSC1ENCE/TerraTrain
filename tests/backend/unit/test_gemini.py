@@ -43,7 +43,7 @@ def test_settings_provider_resolution():
 async def test_rag_service_embed_gemini(monkeypatch):
     # Setup settings to use gemini
     settings = Settings(
-        gemini_api_key="test_key", llm_provider="gemini", embedding_provider="gemini"
+        gemini_api_key="test_key", llm_provider="gemini", embedding_provider="gemini", gemini_embed_model="text-embedding-004"
     )
     monkeypatch.setattr("terratrain.services.rag_service.get_settings", lambda: settings)
 
@@ -72,7 +72,7 @@ async def test_rag_service_embed_gemini(monkeypatch):
 @pytest.mark.asyncio
 async def test_pdf_ingestor_embed_batch_gemini(monkeypatch):
     settings = Settings(
-        gemini_api_key="test_key", llm_provider="gemini", embedding_provider="gemini"
+        gemini_api_key="test_key", llm_provider="gemini", embedding_provider="gemini", gemini_embed_model="text-embedding-004"
     )
     monkeypatch.setattr("terratrain.ingestion.pdf_ingestor.get_settings", lambda: settings)
 

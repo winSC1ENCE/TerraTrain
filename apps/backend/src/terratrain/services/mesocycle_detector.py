@@ -93,34 +93,43 @@ class MesocycleDetector:
 
         w4_tss, w3_tss, w2_tss, w1_tss = [w["tss"] for w in history]
 
-        rec = "load_1"
-        reason = "Starting a new load cycle because W-1 training stress was low or default start."
+        def is_recovery_week(tss: float, prev_tss: float = 0.0, next_tss: float = 0.0) -> bool:
+            """Determines if a week's TSS represents a recovery/deload week."""
+            if prev_tss > 50 and tss < prev_tss * 0.7:
+                return True
+            if next_tss > 250 and (tss < next_tss * 0.35 or tss < 50):
+                return True
+            return False
 
-        if mesocycle_type == "3-1":
-            avg_prev = (w2_tss + w3_tss + w4_tss) / 3
-            if avg_prev > 50 and w1_tss < avg_prev * 0.7:
-                rec = "load_1"
-                reason = f"Your W-1 TSS ({w1_tss:.0f}) represents a recovery drop compared to previous weeks (avg {avg_prev:.0f} TSS), starting Load Week 1."
-            elif w1_tss > w2_tss > w3_tss > 0:
+        max_recent_tss = max(w1_tss, w2_tss, w3_tss, w4_tss)
+        w1_prev_avg = (w2_tss + w3_tss + w4_tss) / 3 if (w2_tss + w3_tss + w4_tss) > 0 else w2_tss
+
+        if max_recent_tss < 50:
+            rec = "load_1"
+            reason = "Starting a new load cycle because previous training stress was low or default start."
+        elif is_recovery_week(w1_tss, prev_tss=w1_prev_avg):
+            rec = "load_1"
+            reason = f"Your W-1 TSS ({w1_tss:.0f}) represents a recovery drop compared to previous weeks (avg {w1_prev_avg:.0f} TSS), starting Load Week 1."
+        elif is_recovery_week(w2_tss, prev_tss=w3_tss, next_tss=w1_tss):
+            # W-2 was recovery, W-1 was Load 1
+            rec = "load_2"
+            reason = f"W-2 was a recovery week (TSS: {w2_tss:.0f}). Following Load Week 1 in W-1 (TSS: {w1_tss:.0f}), recommending Load Week 2."
+        elif is_recovery_week(w3_tss, prev_tss=w4_tss, next_tss=w2_tss):
+            # W-3 was recovery, W-2 was Load 1, W-1 was Load 2
+            if mesocycle_type == "3-1":
+                rec = "load_3"
+                reason = f"Progressive loading detected over the last 2 weeks (TSS: {w2_tss:.0f} -> {w1_tss:.0f}) following a recovery week in W-3 (TSS: {w3_tss:.0f}). Recommending Load Week 3."
+            else:  # "2-1"
+                rec = "recovery"
+                reason = f"You completed 2 weeks of progressive loading (TSS: {w2_tss:.0f} -> {w1_tss:.0f}) following recovery in W-3 (TSS: {w3_tss:.0f}). Recommend a recovery week."
+        else:
+            # W-3, W-2, W-1 were all load weeks (no recovery drop in W-3 or W-2)
+            if mesocycle_type == "3-1":
                 rec = "recovery"
                 reason = f"You completed 3 weeks of progressive loading (TSS: {w3_tss:.0f} -> {w2_tss:.0f} -> {w1_tss:.0f}). Time for a recovery week."
-            elif w2_tss > w3_tss > 0:
-                rec = "load_3"
-                reason = f"Progressive overload detected over the last 2 weeks (TSS: {w3_tss:.0f} -> {w2_tss:.0f}). Suggest Load Week 3."
-            else:
-                rec = "load_2"
-                reason = "Continuing progression into Load Week 2."
-        else:  # "2-1"
-            avg_prev = (w2_tss + w3_tss) / 2
-            if avg_prev > 50 and w1_tss < avg_prev * 0.7:
-                rec = "load_1"
-                reason = f"Starting Load Week 1 following recovery (W-1 TSS: {w1_tss:.0f} vs avg {avg_prev:.0f} TSS)."
-            elif w1_tss > w2_tss > 0:
+            else:  # "2-1"
                 rec = "recovery"
-                reason = f"You completed 2 weeks of progressive loading (TSS: {w2_tss:.0f} -> {w1_tss:.0f}). Recommend recovery week."
-            else:
-                rec = "load_2"
-                reason = "Progression into Load Week 2."
+                reason = f"You completed 2 weeks of progressive loading (TSS: {w2_tss:.0f} -> {w1_tss:.0f}). Recommend a recovery week."
 
         return {
             "selected_week": selected_week_info,
